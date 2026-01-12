@@ -922,6 +922,27 @@ def delete_body_by_token(body_token: str):
 
 
 @mcp.tool()
+def delete_entity_by_token(entity_token: str):
+    """
+    Delete a specific entity in Fusion 360 using its entity token.
+    The entity_token is returned when you create objects.
+
+    Args:
+        entity_token: The unique entity token of the entity to delete
+
+    Returns:
+        Status information about the deleted entity
+    """
+    endpoint = config.ENDPOINTS["delete_entity_by_token"]
+    headers = config.HEADERS
+    data = {
+        "entity_token": entity_token
+    }
+    response = send_request(endpoint, data, headers)
+    return format_tool_response(response, "delete_entity_by_token")
+
+
+@mcp.tool()
 def edit_extrude_distance(feature_token: str, new_distance: float):
     """
     Modify the extrusion distance of an existing extrude feature.

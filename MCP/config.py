@@ -42,7 +42,8 @@ ENDPOINTS = {
     "delete_everything": f"{BASE_URL}/delete_everything",
     "boolean_operation": f"{BASE_URL}/boolean_operation",
     "draw_2d_rectangle": f"{BASE_URL}/draw_2d_rectangle",
-    "rectangular_pattern": f"{BASE_URL}/rectangular_pattern"
+    "rectangular_pattern": f"{BASE_URL}/rectangular_pattern",
+    "delete_entity_by_token": f"{BASE_URL}/delete_entity_by_token"
     
 }
 

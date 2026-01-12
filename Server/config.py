@@ -45,6 +45,7 @@ ENDPOINTS = {
     # Entity editing endpoints (using entity tokens)
     "move_body_by_token": f"{BASE_URL}/move_body_by_token",
     "delete_body_by_token": f"{BASE_URL}/delete_body_by_token",
+    "delete_entity_by_token": f"{BASE_URL}/delete_entity_by_token",
     "edit_extrude_distance": f"{BASE_URL}/edit_extrude_distance",
     "get_body_info": f"{BASE_URL}/get_body_info",
     "get_feature_info": f"{BASE_URL}/get_feature_info",

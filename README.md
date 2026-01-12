@@ -218,6 +218,7 @@ Just open Claude, an ask for the FusionMCP
 | **Test connection** | Tests the communication link to the Fusion 360 server. |
 | **Undo** | **Undoes** the last operation in Fusion 360. |
 | **Delete all** | **Deletes all objects** and **clears timeline history** in the current Fusion 360 session (`destroy`). |
+| **Delete entity by token** | **Deletes a specific entity** using its entity token. |
 
 ---
 

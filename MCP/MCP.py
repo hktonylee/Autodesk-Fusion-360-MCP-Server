@@ -182,6 +182,8 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
                 entity_data = move_body_by_token(design, ui, task[1], task[2], task[3], task[4])
             elif task[0] == 'delete_body_by_token':
                 entity_data = delete_body_by_token(design, ui, task[1])
+            elif task[0] == 'delete_entity_by_token':
+                entity_data = delete_entity_by_token(design, ui, task[1])
             elif task[0] == 'edit_extrude_distance':
                 entity_data = edit_extrude_distance(design, ui, task[1], task[2])
             elif task[0] == 'get_body_info_by_token':
@@ -733,6 +735,46 @@ def delete_body_by_token(design, ui, body_token):
     except:
         if ui:
             ui.messageBox('Failed delete_body_by_token:\n{}'.format(traceback.format_exc()))
+        return None
+
+
+def delete_entity_by_token(design, ui, entity_token):
+    """
+    Delete an entity identified by its entityToken.
+
+    Args:
+        design: The active Fusion design
+        ui: The user interface object
+        entity_token: The entityToken of the entity to delete
+
+    Returns:
+        dict: Status information, or None on failure
+    """
+    try:
+        rootComp = design.rootComponent
+        entity = find_entity_by_token(design, entity_token)
+        if entity is None:
+            if ui:
+                ui.messageBox("Entity with token not found")
+            return None
+
+        entity_name = getattr(entity, "name", "")
+        entity_type = getattr(entity, "objectType", "")
+
+        if entity_type == adsk.fusion.BRepBody.classType():
+            removeFeats = rootComp.features.removeFeatures
+            removeFeats.add(entity)
+        else:
+            entity.deleteMe()
+
+        return {
+            "deleted_entity_name": entity_name,
+            "deleted_entity_token": entity_token,
+            "deleted_entity_type": entity_type,
+        }
+    except:
+        if ui:
+            ui.messageBox('Failed delete_entity_by_token:\n{}'.format(traceback.format_exc()))
         return None
 
 
@@ -2315,6 +2357,11 @@ class Handler(BaseHTTPRequestHandler):
             elif path == '/delete_body_by_token':
                 body_token = str(data.get('body_token'))
                 response = self.queue_task_and_wait(('delete_body_by_token', body_token))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
+            elif path == '/delete_entity_by_token':
+                entity_token = str(data.get('entity_token'))
+                response = self.queue_task_and_wait(('delete_entity_by_token', entity_token))
                 self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/edit_extrude_distance':
