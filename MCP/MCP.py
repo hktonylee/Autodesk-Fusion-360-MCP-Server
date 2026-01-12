@@ -123,6 +123,8 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
                 entity_data = draw_cylinder(design, ui, task[1], task[2], task[3], task[4], task[5],task[6])
             elif task[0] == 'shell_body':
                 shell_existing_body(design, ui, task[1], task[2])
+            elif task[0] == 'capture_screenshot':
+                entity_data = capture_screenshot(design, ui, task[1], task[2], task[3], task[4])
             elif task[0] == 'undo':
                 undo(design, ui)
             elif task[0] == 'draw_lines':
@@ -1026,6 +1028,21 @@ def create_thread(design, ui,inside,sizes):
 
 
 
+def _coerce_point(point):
+    if isinstance(point, (list, tuple)):
+        if len(point) == 2:
+            return float(point[0]), float(point[1]), 0.0
+        if len(point) == 3:
+            return float(point[0]), float(point[1]), float(point[2])
+    if isinstance(point, str):
+        parts = [p.strip() for p in point.split(",") if p.strip() != ""]
+        if len(parts) == 2:
+            return float(parts[0]), float(parts[1]), 0.0
+        if len(parts) == 3:
+            return float(parts[0]), float(parts[1]), float(parts[2])
+    raise ValueError("point must be a 2D/3D sequence or 'x,y,z' string")
+
+
 def spline(design, ui, points, plane="XY"):
     """
     Draws a spline through the given points on the specified plane
@@ -1043,7 +1060,8 @@ def spline(design, ui, points, plane="XY"):
         
         splinePoints = adsk.core.ObjectCollection.create()
         for point in points:
-            splinePoints.add(adsk.core.Point3D.create(point[0], point[1], point[2]))
+            x, y, z = _coerce_point(point)
+            splinePoints.add(adsk.core.Point3D.create(x, y, z))
         
         sketch.sketchCurves.sketchFittedSplines.add(splinePoints)
     except:
@@ -1256,13 +1274,41 @@ def sweep(design,ui):
         sketches = rootComp.sketches
         sweeps = rootComp.features.sweepFeatures
 
-        profsketch = sketches.item(sketches.count - 2)  # Letzter Sketch
-        prof = profsketch.profiles.item(0) # Letztes Profil im Sketch also der Kreis
-        pathsketch = sketches.item(sketches.count - 1) # take the last sketch as path
+        profsketch = None
+        for i in range(sketches.count - 1, -1, -1):
+            sketch = sketches.item(i)
+            if sketch.profiles.count > 0:
+                profsketch = sketch
+                break
+        if profsketch is None:
+            if ui:
+                ui.messageBox('Failed sweep:\nNo sketch with a profile found')
+            return None
+        prof = profsketch.profiles.item(0)
+
+        pathsketch = None
+        for i in range(sketches.count - 1, -1, -1):
+            sketch = sketches.item(i)
+            if sketch == profsketch:
+                continue
+            if sketch.sketchCurves.count > 0:
+                pathsketch = sketch
+                break
+        if pathsketch is None:
+            if profsketch.sketchCurves.count > 0:
+                pathsketch = profsketch
+            else:
+                if ui:
+                    ui.messageBox('Failed sweep:\nNo sketch with a path found')
+                return None
         # collect all sketch curves in an ObjectCollection
         pathCurves = adsk.core.ObjectCollection.create()
         for i in range(pathsketch.sketchCurves.count):
             pathCurves.add(pathsketch.sketchCurves.item(i))
+        if pathCurves.count == 0:
+            if ui:
+                ui.messageBox('Failed sweep:\nPath sketch has no curves')
+            return None
 
     
         path = adsk.fusion.Path.create(pathCurves, 0) # connec
@@ -1535,22 +1581,36 @@ def undo(design, ui):
             ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
 
 
-def delete(design,ui):
+def delete(design, ui):
     """
-    Remove every body and sketch from the design so nothing is left
+    Remove every body and sketch from the design and clear timeline history.
     """
     try:
         rootComp = design.rootComponent
-        sketches = rootComp.sketches
+
+        timeline = getattr(design, "timeline", None)
+        if timeline:
+            for i in range(timeline.count - 1, -1, -1):
+                item = timeline.item(i)
+                if item:
+                    item.deleteMe()
+
         bodies = rootComp.bRepBodies
         removeFeat = rootComp.features.removeFeatures
-
-        # Delete from back to front
-        for i in range(bodies.count - 1, -1, -1): # starts at bodies.count - 1 and goes in steps of -1 to 0 
+        for i in range(bodies.count - 1, -1, -1):
             body = bodies.item(i)
-            removeFeat.add(body)
+            if body:
+                try:
+                    removeFeat.add(body)
+                except:
+                    body.deleteMe()
 
-        
+        sketches = rootComp.sketches
+        for i in range(sketches.count - 1, -1, -1):
+            sketch = sketches.item(i)
+            if sketch:
+                sketch.deleteMe()
+
     except:
         if ui:
             ui.messageBox('Failed to delete:\n{}'.format(traceback.format_exc()))
@@ -1579,6 +1639,43 @@ def export_as_STEP(design, ui,Name):
     except:
         if ui:
             ui.messageBox('Failed export_as_STEP:\n{}'.format(traceback.format_exc()))
+
+def capture_screenshot(design, ui, name, width, height, directory=None):
+    """
+    Capture a screenshot of the active viewport.
+
+    Returns:
+        dict: Entity data with image path and dimensions, or None on failure
+    """
+    try:
+        app = adsk.core.Application.get()
+        viewport = app.activeViewport
+        if not viewport:
+            raise RuntimeError("No active viewport available")
+
+        file_name = name if name.lower().endswith('.png') else f"{name}.png"
+        if directory:
+            base_dir = directory
+        else:
+            directory_name = "Fusion_Screenshots"
+            desktop_path = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
+            base_dir = os.path.join(desktop_path, directory_name)
+
+        os.makedirs(base_dir, exist_ok=True)
+        file_path = os.path.join(base_dir, file_name)
+
+        if not viewport.saveAsImageFile(file_path, int(width), int(height)):
+            raise RuntimeError("Viewport saveAsImageFile returned False")
+
+        return {
+            'image_path': file_path,
+            'width': int(width),
+            'height': int(height)
+        }
+    except:
+        if ui:
+            ui.messageBox('Failed capture_screenshot:\n{}'.format(traceback.format_exc()))
+        return None
 
 def cut_extrude(design,ui,depth):
     try:
@@ -1986,6 +2083,14 @@ class Handler(BaseHTTPRequestHandler):
             elif path == '/Export_STEP':
                 name = str(data.get('name','Test.step'))
                 response = self.queue_task_and_wait(('export_step', name))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
+            elif path == '/screenshot':
+                name = str(data.get('name', 'FusionScreenshot'))
+                width = int(data.get('width', 1920))
+                height = int(data.get('height', 1080))
+                directory = data.get('directory', None)
+                response = self.queue_task_and_wait(('capture_screenshot', name, width, height, directory))
                 self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/fillet_edges':

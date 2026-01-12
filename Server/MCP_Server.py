@@ -271,7 +271,7 @@ def test_connection():
 
 @mcp.tool()
 def delete_all():
-    """Deletes all objects in the current Fusion 360 session."""
+    """Deletes all objects and clears timeline history in the current Fusion 360 session."""
     endpoint = config.ENDPOINTS["delete_everything"]
     headers = config.HEADERS
     response = send_request(endpoint, {}, headers)
@@ -409,6 +409,21 @@ def export_stl(name : str):
     }
     response = send_request(endpoint, data, {})
     return format_tool_response(response, "export_stl")
+
+@mcp.tool()
+def capture_screenshot(name: str = "FusionScreenshot", width: int = 1920, height: int = 1080, directory: str = None):
+    """Captures a screenshot of the active viewport."""
+    endpoint = config.ENDPOINTS["screenshot"]
+    payload = {
+        "name": name,
+        "width": width,
+        "height": height
+    }
+    if directory:
+        payload["directory"] = directory
+    headers = config.HEADERS
+    response = send_request(endpoint, payload, headers)
+    return format_tool_response(response, "capture_screenshot")
 
 @mcp.tool()
 def fillet_edges(radius: str):

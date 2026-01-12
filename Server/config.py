@@ -16,6 +16,7 @@ ENDPOINTS = {
     "list_parameters": f"{BASE_URL}/list_parameters",
     "export_step": f"{BASE_URL}/Export_STEP",
     "export_stl": f"{BASE_URL}/Export_STL",
+    "screenshot": f"{BASE_URL}/screenshot",
     "fillet_edges": f"{BASE_URL}/fillet_edges",
     "change_parameter": f"{BASE_URL}/set_parameter",
     "draw_cylinder": f"{BASE_URL}/draw_cylinder",
