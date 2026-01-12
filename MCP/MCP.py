@@ -11,9 +11,12 @@ import os
 
 ModelParameterSnapshot = []
 httpd = None
-task_queue = queue.Queue()  # Queue für thread-safe Aktionen
+task_queue = queue.Queue()  # Queue for thread-safe actions
+response_dict = {}  # Dictionary to store task responses by task_id
+response_lock = threading.Lock()  # Lock for thread-safe access to response_dict
+task_id_counter = 0  # Counter for generating unique task IDs
 
-# Event Handler Variablen
+# Event Handler Variables
 app = None
 ui = None
 design = None
@@ -21,6 +24,35 @@ handlers = []
 stopFlag = None
 myCustomEvent = 'MCPTaskEvent'
 customEvent = None
+
+def set_task_response(task_id, success, message, error=None):
+    """Store task response in the response dictionary"""
+    global response_dict, response_lock
+    with response_lock:
+        response_dict[task_id] = {
+            'success': success,
+            'message': message,
+            'error': error,
+            'completed': True
+        }
+
+def get_task_response(task_id, timeout=5.0):
+    """Wait for and retrieve task response"""
+    global response_dict, response_lock
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        with response_lock:
+            if task_id in response_dict and response_dict[task_id].get('completed'):
+                response = response_dict.pop(task_id)
+                return response
+        time.sleep(0.05)  # Small sleep to avoid busy waiting
+    return {'success': False, 'message': 'Task timeout', 'error': 'Task did not complete within timeout period'}
+
+def generate_task_id():
+    """Generate a unique task ID"""
+    global task_id_counter
+    task_id_counter += 1
+    return task_id_counter
 
 #Event Handler Class
 class TaskEventHandler(adsk.core.CustomEventHandler):
@@ -35,10 +67,10 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
         global task_queue, ModelParameterSnapshot, design, ui
         try:
             if design:
-                # Parameter Snapshot aktualisieren
+                # Update parameter snapshot
                 ModelParameterSnapshot = get_model_parameters(design)
                 
-                # Task-Queue abarbeiten
+                # Process task queue
                 while not task_queue.empty():
                     try:
                         task = task_queue.get_nowait()
@@ -46,95 +78,101 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
                     except queue.Empty:
                         break
                     except Exception as e:
-                        if ui:
-                            ui.messageBox(f"Task-Fehler: {str(e)}")
+                        # If task has an ID, report the error
+                        if len(task) > 0 and isinstance(task[-1], int):
+                            task_id = task[-1]
+                            set_task_response(task_id, False, f"Task error: {str(e)}", traceback.format_exc())
                         continue
                         
         except Exception as e:
-
             pass
     
     def process_task(self, task):
-        """Verarbeitet eine einzelne Task"""
+        """Processes a single task"""
         global design, ui
         
-        if task[0] == 'set_parameter':
-            set_parameter(design, ui, task[1], task[2])
-        elif task[0] == 'draw_box':
+        # Extract task_id (always the last element)
+        task_id = task[-1] if len(task) > 0 and isinstance(task[-1], int) else None
+        task_name = task[0] if len(task) > 0 else 'unknown'
+        
+        try:
+            if task[0] == 'set_parameter':
+                set_parameter(design, ui, task[1], task[2])
+            elif task[0] == 'draw_box':
+                draw_Box(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7])
+            elif task[0] == 'draw_witzenmann':
+                draw_Witzenmann(design, ui, task[1],task[2])
+            elif task[0] == 'export_stl':
+                export_as_STL(design, ui, task[1])
+            elif task[0] == 'fillet_edges':
+                fillet_edges(design, ui, task[1])
+            elif task[0] == 'export_step':
+                export_as_STEP(design, ui, task[1])
+            elif task[0] == 'draw_cylinder':
+                draw_cylinder(design, ui, task[1], task[2], task[3], task[4], task[5],task[6])
+            elif task[0] == 'shell_body':
+                shell_existing_body(design, ui, task[1], task[2])
+            elif task[0] == 'undo':
+                undo(design, ui)
+            elif task[0] == 'draw_lines':
+                draw_lines(design, ui, task[1], task[2])
+            elif task[0] == 'extrude_last_sketch':
+                extrude_last_sketch(design, ui, task[1],task[2])
+            elif task[0] == 'revolve_profile':
+                revolve_profile(design, ui,  task[1])        
+            elif task[0] == 'arc':
+                arc(design, ui, task[1], task[2], task[3], task[4],task[5])
+            elif task[0] == 'draw_one_line':
+                draw_one_line(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7])
+            elif task[0] == 'holes':
+                holes(design, ui, task[1], task[2], task[3], task[4])
+            elif task[0] == 'circle':
+                draw_circle(design, ui, task[1], task[2], task[3], task[4],task[5])
+            elif task[0] == 'extrude_thin':
+                extrude_thin(design, ui, task[1],task[2])
+            elif task[0] == 'select_body':
+                select_body(design, ui, task[1])
+            elif task[0] == 'select_sketch':
+                select_sketch(design, ui, task[1])
+            elif task[0] == 'spline':
+                spline(design, ui, task[1], task[2])
+            elif task[0] == 'sweep':
+                sweep(design, ui)
+            elif task[0] == 'cut_extrude':
+                cut_extrude(design,ui,task[1])
+            elif task[0] == 'circular_pattern':
+                circular_pattern(design,ui,task[1],task[2],task[3])
+            elif task[0] == 'offsetplane':
+                offsetplane(design,ui,task[1],task[2])
+            elif task[0] == 'loft':
+                loft(design, ui, task[1])
+            elif task[0] == 'ellipsis':
+                draw_ellipis(design,ui,task[1],task[2],task[3],task[4],task[5],task[6],task[7],task[8],task[9],task[10])
+            elif task[0] == 'draw_sphere':
+                create_sphere(design, ui, task[1], task[2], task[3], task[4])
+            elif task[0] == 'threaded':
+                create_thread(design, ui, task[1], task[2])
+            elif task[0] == 'delete_everything':
+                delete(design, ui)
+            elif task[0] == 'boolean_operation':
+                boolean_operation(design,ui,task[1])
+            elif task[0] == 'draw_2d_rectangle':
+                draw_2d_rect(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7])
+            elif task[0] == 'rectangular_pattern':
+                rect_pattern(design,ui,task[1],task[2],task[3],task[4],task[5],task[6],task[7])
+            elif task[0] == 'draw_text':
+                draw_text(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7], task[8], task[9],task[10])
+            elif task[0] == 'move_body':
+                move_last_body(design,ui,task[1],task[2],task[3])
             
-            draw_Box(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7])
-            
-        elif task[0] == 'draw_witzenmann':
-            draw_Witzenmann(design, ui, task[1],task[2])
-        elif task[0] == 'export_stl':
-
-            export_as_STL(design, ui, task[1])
-        elif task[0] == 'fillet_edges':
-            fillet_edges(design, ui, task[1])
-        elif task[0] == 'export_step':
-
-            export_as_STEP(design, ui, task[1])
-        elif task[0] == 'draw_cylinder':
-            draw_cylinder(design, ui, task[1], task[2], task[3], task[4], task[5],task[6])
-        elif task[0] == 'shell_body':
-            shell_existing_body(design, ui, task[1], task[2])
-        elif task[0] == 'undo':
-            undo(design, ui)
-        elif task[0] == 'draw_lines':
-            draw_lines(design, ui, task[1], task[2])
-        elif task[0] == 'extrude_last_sketch':
-            extrude_last_sketch(design, ui, task[1],task[2])
-        elif task[0] == 'revolve_profile':
-            # 'rootComp = design.rootComponent
-            # sketches = rootComp.sketches
-            # sketch = sketches.item(sketches.count - 1)  # Letzter Sketch
-            # axisLine = sketch.sketchCurves.sketchLines.item(0)  # Erste Linie als Achse'
-            revolve_profile(design, ui,  task[1])        
-        elif task[0] == 'arc':
-            arc(design, ui, task[1], task[2], task[3], task[4],task[5])
-        elif task[0] == 'draw_one_line':
-            draw_one_line(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7])
-        elif task[0] == 'holes': #task format: ('holes', points, width, depth, through, faceindex)
-            # task[3]=depth, task[4]=through, task[5]=faceindex
-            holes(design, ui, task[1], task[2], task[3], task[4])
-        elif task[0] == 'circle':
-            draw_circle(design, ui, task[1], task[2], task[3], task[4],task[5])
-        elif task[0] == 'extrude_thin':
-            extrude_thin(design, ui, task[1],task[2])
-        elif task[0] == 'select_body':
-            select_body(design, ui, task[1])
-        elif task[0] == 'select_sketch':
-            select_sketch(design, ui, task[1])
-        elif task[0] == 'spline':
-            spline(design, ui, task[1], task[2])
-        elif task[0] == 'sweep':
-            sweep(design, ui)
-        elif task[0] == 'cut_extrude':
-            cut_extrude(design,ui,task[1])
-        elif task[0] == 'circular_pattern':
-            circular_pattern(design,ui,task[1],task[2],task[3])
-        elif task[0] == 'offsetplane':
-            offsetplane(design,ui,task[1],task[2])
-        elif task[0] == 'loft':
-            loft(design, ui, task[1])
-        elif task[0] == 'ellipsis':
-            draw_ellipis(design,ui,task[1],task[2],task[3],task[4],task[5],task[6],task[7],task[8],task[9],task[10])
-        elif task[0] == 'draw_sphere':
-            create_sphere(design, ui, task[1], task[2], task[3], task[4])
-        elif task[0] == 'threaded':
-            create_thread(design, ui, task[1], task[2])
-        elif task[0] == 'delete_everything':
-            delete(design, ui)
-        elif task[0] == 'boolean_operation':
-            boolean_operation(design,ui,task[1])
-        elif task[0] == 'draw_2d_rectangle':
-            draw_2d_rect(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7])
-        elif task[0] == 'rectangular_pattern':
-            rect_pattern(design,ui,task[1],task[2],task[3],task[4],task[5],task[6],task[7])
-        elif task[0] == 'draw_text':
-            draw_text(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7], task[8], task[9],task[10])
-        elif task[0] == 'move_body':
-            move_last_body(design,ui,task[1],task[2],task[3])
+            # Task completed successfully
+            if task_id is not None:
+                set_task_response(task_id, True, f"{task_name} completed successfully")
+                
+        except Exception as e:
+            error_msg = traceback.format_exc()
+            if task_id is not None:
+                set_task_response(task_id, False, f"{task_name} failed: {str(e)}", error_msg)
         
 
 
@@ -144,7 +182,7 @@ class TaskThread(threading.Thread):
         self.stopped = event
 
     def run(self):
-        # Alle 200ms Custom Event feuern für Task-Verarbeitung
+        # Fire custom event every 200ms for task processing
         while not self.stopped.wait(0.2):
             try:
                 app.fireCustomEvent(myCustomEvent, json.dumps({}))
@@ -477,7 +515,7 @@ def move_last_body(design,ui,x,y,z):
                 latest_body = body.item(body.count - 1)
                 bodies.add(latest_body)
         else:
-            ui.messageBox("Keine Bodies gefunden.")
+            ui.messageBox("No bodies found.")
             return
 
         vector = adsk.core.Vector3D.create(x,y,z)
@@ -672,7 +710,7 @@ def draw_lines(design,ui, points,Plane = "XY"):
         sketch.sketchCurves.sketchLines.addByTwoPoints(
             adsk.core.Point3D.create(points[-1][0],points[-1][1],0),
             adsk.core.Point3D.create(points[0][0],points[0][1],0) #
-        ) # Verbindet den ersten und letzten Punkt
+        ) # Connects the first and last point
 
     except:
         if ui :
@@ -933,7 +971,7 @@ def rect_pattern(design,ui,axis_one ,axis_two ,quantity_one,quantity_two,distanc
         if bodies.count > 0:
             latest_body = bodies.item(bodies.count - 1)
         else:
-            ui.messageBox("Keine Bodies gefunden.")
+            ui.messageBox("No bodies found.")
         inputEntites = adsk.core.ObjectCollection.create()
         inputEntites.add(latest_body)
         baseaxis_one = None    
@@ -975,7 +1013,7 @@ def circular_pattern(design, ui, quantity, axis, plane):
         if bodies.count > 0:
             latest_body = bodies.item(bodies.count - 1)
         else:
-            ui.messageBox("Keine Bodies gefunden.")
+            ui.messageBox("No bodies found.")
         inputEntites = adsk.core.ObjectCollection.create()
         inputEntites.add(latest_body)
         if plane == "XY":
@@ -1032,8 +1070,8 @@ def delete(design,ui):
         bodies = rootComp.bRepBodies
         removeFeat = rootComp.features.removeFeatures
 
-        # Von hinten nach vorne löschen
-        for i in range(bodies.count - 1, -1, -1): # startet bei bodies.count - 1 und geht in Schritten von -1 bis 0 
+        # Delete from back to front
+        for i in range(bodies.count - 1, -1, -1): # starts at bodies.count - 1 and goes in steps of -1 to 0 
             body = bodies.item(i)
             removeFeat.add(body)
 
@@ -1201,7 +1239,7 @@ def get_model_parameters(design):
             model_params.append({
                 "Name": str(param.name),
                 "Wert": wert,
-                "Einheit": str(param.unit),
+                "Unit": str(param.unit),
                 "Expression": str(param.expression) if param.expression else ""
             })
     return model_params
@@ -1231,7 +1269,7 @@ def holes(design, ui, points, width=1.0,distance = 1.0,faceindex=0):
         if bodies.count > 0:
             latest_body = bodies.item(bodies.count - 1)
         else:
-            ui.messageBox("Keine Bodies gefunden.")
+            ui.messageBox("No bodies found.")
             return
         entities = adsk.core.ObjectCollection.create()
         entities.add(latest_body.faces.item(faceindex))
@@ -1286,24 +1324,36 @@ def select_sketch(design,ui,Sketchname):
 
 # HTTP Server######
 class Handler(BaseHTTPRequestHandler):
+    
+    def queue_task_and_wait(self, task_tuple, timeout=10.0):
+        """Queue a task and wait for its completion, returning the response"""
+        task_id = generate_task_id()
+        # Append task_id to the task tuple
+        task_with_id = task_tuple + (task_id,)
+        task_queue.put(task_with_id)
+        
+        # Wait for response
+        response = get_task_response(task_id, timeout)
+        return response
+    
+    def send_json_response(self, response_data, status_code=200):
+        """Helper to send JSON response"""
+        self.send_response(status_code)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(response_data).encode('utf-8'))
+    
     def do_GET(self):
         global ModelParameterSnapshot
         try:
             if self.path == '/count_parameters':
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"user_parameter_count": len(ModelParameterSnapshot)}).encode('utf-8'))
+                self.send_json_response({"success": True, "user_parameter_count": len(ModelParameterSnapshot)})
             elif self.path == '/list_parameters':
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"ModelParameter": ModelParameterSnapshot}).encode('utf-8'))
-           
+                self.send_json_response({"success": True, "ModelParameter": ModelParameterSnapshot})
             else:
                 self.send_error(404,'Not Found')
         except Exception as e:
-            self.send_error(500,str(e))
+            self.send_json_response({"success": False, "error": str(e)}, 500)
 
     def do_POST(self):
         try:
@@ -1312,23 +1362,19 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(post_data) if post_data else {}
             path = self.path
 
-            # Alle Aktionen in die Queue legen
+            # Add all actions to the queue and wait for response
             if path.startswith('/set_parameter'):
                 name = data.get('name')
                 value = data.get('value')
                 if name and value:
-                    task_queue.put(('set_parameter', name, value))
-                    self.send_response(200)
-                    self.send_header('Content-type','application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({"message": f"Parameter {name} wird gesetzt"}).encode('utf-8'))
+                    response = self.queue_task_and_wait(('set_parameter', name, value))
+                    self.send_json_response(response, 200 if response.get('success') else 500)
+                else:
+                    self.send_json_response({"success": False, "error": "Missing name or value"}, 400)
 
             elif path == '/undo':
-                task_queue.put(('undo',))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Undo wird ausgeführt"}).encode('utf-8'))
+                response = self.queue_task_and_wait(('undo',))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/Box':
                 height = float(data.get('height',5))
@@ -1338,48 +1384,29 @@ class Handler(BaseHTTPRequestHandler):
                 y = float(data.get('y',0))
                 z = float(data.get('z',0))
                 Plane = data.get('plane',None)  # 'XY', 'XZ', 'YZ' or None
-
-                task_queue.put(('draw_box', height, width, depth,x,y,z, Plane))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Box wird erstellt"}).encode('utf-8'))
+                response = self.queue_task_and_wait(('draw_box', height, width, depth, x, y, z, Plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/Witzenmann':
                 scale = data.get('scale',1.0)
                 z = float(data.get('z',0))
-                task_queue.put(('draw_witzenmann', scale,z))
-
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Witzenmann-Logo wird erstellt"}).encode('utf-8'))
+                response = self.queue_task_and_wait(('draw_witzenmann', scale, z))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/Export_STL':
                 name = str(data.get('Name','Test.stl'))
-                task_queue.put(('export_stl', name))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "STL Export gestartet"}).encode('utf-8'))
-
+                response = self.queue_task_and_wait(('export_stl', name))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/Export_STEP':
                 name = str(data.get('name','Test.step'))
-                task_queue.put(('export_step',name))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "STEP Export gestartet"}).encode('utf-8'))
-
+                response = self.queue_task_and_wait(('export_step', name))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/fillet_edges':
-                radius = float(data.get('radius',0.3)) #0.3 as default
-                task_queue.put(('fillet_edges',radius))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Fillet edges started"}).encode('utf-8'))
+                radius = float(data.get('radius',0.3))
+                response = self.queue_task_and_wait(('fillet_edges', radius))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/draw_cylinder':
                 radius = float(data.get('radius'))
@@ -1387,61 +1414,42 @@ class Handler(BaseHTTPRequestHandler):
                 x = float(data.get('x',0))
                 y = float(data.get('y',0))
                 z = float(data.get('z',0))
-                plane = data.get('plane', 'XY')  # 'XY', 'XZ', 'YZ'
-                task_queue.put(('draw_cylinder', radius, height, x, y,z, plane))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Cylinder wird erstellt"}).encode('utf-8'))
-            
+                plane = data.get('plane', 'XY')
+                response = self.queue_task_and_wait(('draw_cylinder', radius, height, x, y, z, plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/shell_body':
-                thickness = float(data.get('thickness',0.5)) #0.5 as default
+                thickness = float(data.get('thickness',0.5))
                 faceindex = int(data.get('faceindex',0))
-                task_queue.put(('shell_body', thickness, faceindex))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Shell body wird erstellt"}).encode('utf-8'))
+                response = self.queue_task_and_wait(('shell_body', thickness, faceindex))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/draw_lines':
                 points = data.get('points', [])
-                Plane = data.get('plane', 'XY')  # 'XY', 'XZ', 'YZ'
-                task_queue.put(('draw_lines', points, Plane))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Lines werden erstellt"}).encode('utf-8'))
-            
+                Plane = data.get('plane', 'XY')
+                response = self.queue_task_and_wait(('draw_lines', points, Plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/extrude_last_sketch':
-                value = float(data.get('value',1.0)) #1.0 as default
-                taperangle = float(data.get('taperangle')) #0.0 as default
-                task_queue.put(('extrude_last_sketch', value,taperangle))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Letzter Sketch wird extrudiert"}).encode('utf-8'))
-                
+                value = float(data.get('value',1.0))
+                taperangle = float(data.get('taperangle', 0.0))
+                response = self.queue_task_and_wait(('extrude_last_sketch', value, taperangle))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/revolve':
-                angle = float(data.get('angle',360)) #360 as default
-                #axis = data.get('axis','X')  # 'X', 'Y', 'Z'
-                task_queue.put(('revolve_profile', angle))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Profil wird revolviert"}).encode('utf-8'))
+                angle = float(data.get('angle',360))
+                response = self.queue_task_and_wait(('revolve_profile', angle))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/arc':
                 point1 = data.get('point1', [0,0])
                 point2 = data.get('point2', [1,1])
                 point3 = data.get('point3', [2,0])
                 connect = bool(data.get('connect', False))
-                plane = data.get('plane', 'XY')  # 'XY', 'XZ', 'YZ'
-                task_queue.put(('arc', point1, point2, point3, connect, plane))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Arc wird erstellt"}).encode('utf-8'))
-            
+                plane = data.get('plane', 'XY')
+                response = self.queue_task_and_wait(('arc', point1, point2, point3, connect, plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/draw_one_line':
                 x1 = float(data.get('x1',0))
                 y1 = float(data.get('y1',0))
@@ -1449,13 +1457,10 @@ class Handler(BaseHTTPRequestHandler):
                 x2 = float(data.get('x2',1))
                 y2 = float(data.get('y2',1))
                 z2 = float(data.get('z2',0))
-                plane = data.get('plane', 'XY')  # 'XY', 'XZ', 'YZ'
-                task_queue.put(('draw_one_line', x1, y1, z1, x2, y2, z2, plane))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Line wird erstellt"}).encode('utf-8'))
-            
+                plane = data.get('plane', 'XY')
+                response = self.queue_task_and_wait(('draw_one_line', x1, y1, z1, x2, y2, z2, plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/holes':
                 points = data.get('points', [[0,0]])
                 width = float(data.get('width', 1.0))
@@ -1463,165 +1468,108 @@ class Handler(BaseHTTPRequestHandler):
                 distance = data.get('depth', None)
                 if distance is not None:
                     distance = float(distance)
-                through = bool(data.get('through', False))
-                task_queue.put(('holes', points, width, distance,  faceindex))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                
-                self.wfile.write(json.dumps({"message": "Loch wird erstellt"}).encode('utf-8'))
+                response = self.queue_task_and_wait(('holes', points, width, distance, faceindex))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/create_circle':
                 radius = float(data.get('radius',1.0))
                 x = float(data.get('x',0))
                 y = float(data.get('y',0))
                 z = float(data.get('z',0))
-                plane = data.get('plane', 'XY')  # 'XY', 'XZ', 'YZ'
-                task_queue.put(('circle', radius, x, y,z, plane))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Circle wird erstellt"}).encode('utf-8'))
+                plane = data.get('plane', 'XY')
+                response = self.queue_task_and_wait(('circle', radius, x, y, z, plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/extrude_thin':
-                thickness = float(data.get('thickness',0.5)) #0.5 as default
-                distance = float(data.get('distance',1.0)) #1.0 as default
-                task_queue.put(('extrude_thin', thickness,distance))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Thin Extrude wird erstellt"}).encode('utf-8'))
+                thickness = float(data.get('thickness',0.5))
+                distance = float(data.get('distance',1.0))
+                response = self.queue_task_and_wait(('extrude_thin', thickness, distance))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/select_body':
                 name = str(data.get('name', ''))
-                task_queue.put(('select_body', name))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Body wird ausgewählt"}).encode('utf-8'))
+                response = self.queue_task_and_wait(('select_body', name))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/select_sketch':
                 name = str(data.get('name', ''))
-                task_queue.put(('select_sketch', name))
-       
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Sketch wird ausgewählt"}).encode('utf-8'))
+                response = self.queue_task_and_wait(('select_sketch', name))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/sweep':
-                # enqueue a tuple so process_task recognizes the command
-                task_queue.put(('sweep',))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Sweep wird erstellt"}).encode('utf-8'))
-            
+                response = self.queue_task_and_wait(('sweep',))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/spline':
                 points = data.get('points', [])
-                plane = data.get('plane', 'XY')  # 'XY', 'XZ', 'YZ'
-                task_queue.put(('spline', points, plane))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Spline wird erstellt"}).encode('utf-8'))
+                plane = data.get('plane', 'XY')
+                response = self.queue_task_and_wait(('spline', points, plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/cut_extrude':
-                depth = float(data.get('depth',1.0)) #1.0 as default
-                task_queue.put(('cut_extrude', depth))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Cut Extrude wird erstellt"}).encode('utf-8'))
-            
+                depth = float(data.get('depth',1.0))
+                response = self.queue_task_and_wait(('cut_extrude', depth))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/circular_pattern':
-                quantity = float(data.get('quantity',))
+                quantity = float(data.get('quantity'))
                 axis = str(data.get('axis',"X"))
-                plane = str(data.get('plane', 'XY'))  # 'XY', 'XZ', 'YZ'
-                task_queue.put(('circular_pattern',quantity,axis,plane))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Cirular Pattern wird erstellt"}).encode('utf-8'))
-            
+                plane = str(data.get('plane', 'XY'))
+                response = self.queue_task_and_wait(('circular_pattern', quantity, axis, plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/offsetplane':
                 offset = float(data.get('offset',0.0))
-                plane = str(data.get('plane', 'XY'))  # 'XY', 'XZ', 'YZ'
-               
-                task_queue.put(('offsetplane', offset, plane))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Offset Plane wird erstellt"}).encode('utf-8'))
+                plane = str(data.get('plane', 'XY'))
+                response = self.queue_task_and_wait(('offsetplane', offset, plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/loft':
                 sketchcount = int(data.get('sketchcount',2))
-                task_queue.put(('loft', sketchcount))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Loft wird erstellt"}).encode('utf-8'))
-            
+                response = self.queue_task_and_wait(('loft', sketchcount))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/ellipsis':
-                 x_center = float(data.get('x_center',0))
-                 y_center = float(data.get('y_center',0))
-                 z_center = float(data.get('z_center',0))
-                 x_major = float(data.get('x_major',10))
-                 y_major = float(data.get('y_major',0))
-                 z_major = float(data.get('z_major',0))
-                 x_through = float(data.get('x_through',5))
-                 y_through = float(data.get('y_through',4))
-                 z_through = float(data.get('z_through',0))
-                 plane = str(data.get('plane', 'XY'))  # 'XY', 'XZ', 'YZ'
-                 task_queue.put(('ellipsis', x_center, y_center, z_center,
-                                  x_major, y_major, z_major, x_through, y_through, z_through, plane))
-                 self.send_response(200)
-                 self.send_header('Content-type','application/json')
-                 self.end_headers()
-                 self.wfile.write(json.dumps({"message": "Ellipsis wird erstellt"}).encode('utf-8'))
-                 
+                x_center = float(data.get('x_center',0))
+                y_center = float(data.get('y_center',0))
+                z_center = float(data.get('z_center',0))
+                x_major = float(data.get('x_major',10))
+                y_major = float(data.get('y_major',0))
+                z_major = float(data.get('z_major',0))
+                x_through = float(data.get('x_through',5))
+                y_through = float(data.get('y_through',4))
+                z_through = float(data.get('z_through',0))
+                plane = str(data.get('plane', 'XY'))
+                response = self.queue_task_and_wait(('ellipsis', x_center, y_center, z_center,
+                                 x_major, y_major, z_major, x_through, y_through, z_through, plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/sphere':
                 radius = float(data.get('radius',5.0))
                 x = float(data.get('x',0))
                 y = float(data.get('y',0))
                 z = float(data.get('z',0))
-                plane = data.get('plane', 'XY')  # 'XY', 'XZ', 'YZ'
-                task_queue.put(('draw_sphere', radius, x, y,z, plane))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Sphere wird erstellt"}).encode('utf-8'))
+                response = self.queue_task_and_wait(('draw_sphere', radius, x, y, z))
+                self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/threaded':
                 inside = bool(data.get('inside', True))
                 allsizes = int(data.get('allsizes', 30))
-                task_queue.put(('threaded', inside, allsizes))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Threaded Feature wird erstellt"}).encode('utf-8'))
-                
+                response = self.queue_task_and_wait(('threaded', inside, allsizes), timeout=30.0)  # Longer timeout for user interaction
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/delete_everything':
-                task_queue.put(('delete_everything',))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Alle Bodies werden gelöscht"}).encode('utf-8'))
-                
+                response = self.queue_task_and_wait(('delete_everything',))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/boolean_operation':
-                operation = data.get('operation', 'join')  # 'join', 'cut', 'intersect'
-                task_queue.put(('boolean_operation', operation))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Boolean Operation wird ausgeführt"}).encode('utf-8'))
-            
+                operation = data.get('operation', 'join')
+                response = self.queue_task_and_wait(('boolean_operation', operation))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/test_connection':
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Verbindung erfolgreich"}).encode('utf-8'))
-            
+                self.send_json_response({"success": True, "message": "Connection successful"})
+
             elif path == '/draw_2d_rectangle':
                 x_1 = float(data.get('x_1',0))
                 y_1 = float(data.get('y_1',0))
@@ -1629,61 +1577,47 @@ class Handler(BaseHTTPRequestHandler):
                 x_2 = float(data.get('x_2',1))
                 y_2 = float(data.get('y_2',1))
                 z_2 = float(data.get('z_2',0))
-                plane = data.get('plane', 'XY')  # 'XY', 'XZ', 'YZ'
-                task_queue.put(('draw_2d_rectangle', x_1, y_1, z_1, x_2, y_2, z_2, plane))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "2D Rechteck wird erstellt"}).encode('utf-8'))
-            
-            
+                plane = data.get('plane', 'XY')
+                response = self.queue_task_and_wait(('draw_2d_rectangle', x_1, y_1, z_1, x_2, y_2, z_2, plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/rectangular_pattern':
-                 quantity_one = float(data.get('quantity_one',2))
-                 distance_one = float(data.get('distance_one',5))
-                 axis_one = str(data.get('axis_one',"X"))
-                 quantity_two = float(data.get('quantity_two',2))
-                 distance_two = float(data.get('distance_two',5))
-                 axis_two = str(data.get('axis_two',"Y"))
-                 plane = str(data.get('plane', 'XY'))  # 'XY', 'XZ', 'YZ'
-                 # Parameter-Reihenfolge: axis_one, axis_two, quantity_one, quantity_two, distance_one, distance_two, plane
-                 task_queue.put(('rectangular_pattern', axis_one, axis_two, quantity_one, quantity_two, distance_one, distance_two, plane))
-                 self.send_response(200)
-                 self.send_header('Content-type','application/json')
-                 self.end_headers()
-                 self.wfile.write(json.dumps({"message": "Rectangular Pattern wird erstellt"}).encode('utf-8'))
-                 
+                quantity_one = float(data.get('quantity_one',2))
+                distance_one = float(data.get('distance_one',5))
+                axis_one = str(data.get('axis_one',"X"))
+                quantity_two = float(data.get('quantity_two',2))
+                distance_two = float(data.get('distance_two',5))
+                axis_two = str(data.get('axis_two',"Y"))
+                plane = str(data.get('plane', 'XY'))
+                response = self.queue_task_and_wait(('rectangular_pattern', axis_one, axis_two, quantity_one, quantity_two, distance_one, distance_two, plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/draw_text':
-                 text = str(data.get('text',"Hello"))
-                 x_1 = float(data.get('x_1',0))
-                 y_1 = float(data.get('y_1',0))
-                 z_1 = float(data.get('z_1',0))
-                 x_2 = float(data.get('x_2',10))
-                 y_2 = float(data.get('y_2',4))
-                 z_2 = float(data.get('z_2',0))
-                 extrusion_value = float(data.get('extrusion_value',1.0))
-                 plane = str(data.get('plane', 'XY'))  # 'XY', 'XZ', 'YZ'
-                 thickness = float(data.get('thickness',0.5))
-                 task_queue.put(('draw_text', text,thickness, x_1, y_1, z_1, x_2, y_2, z_2, extrusion_value, plane))
-                 self.send_response(200)
-                 self.send_header('Content-type','application/json')
-                 self.end_headers()
-                 self.wfile.write(json.dumps({"message": "Text wird erstellt"}).encode('utf-8'))
-                 
+                text = str(data.get('text',"Hello"))
+                x_1 = float(data.get('x_1',0))
+                y_1 = float(data.get('y_1',0))
+                z_1 = float(data.get('z_1',0))
+                x_2 = float(data.get('x_2',10))
+                y_2 = float(data.get('y_2',4))
+                z_2 = float(data.get('z_2',0))
+                extrusion_value = float(data.get('extrusion_value',1.0))
+                plane = str(data.get('plane', 'XY'))
+                thickness = float(data.get('thickness',0.5))
+                response = self.queue_task_and_wait(('draw_text', text, thickness, x_1, y_1, z_1, x_2, y_2, z_2, extrusion_value, plane))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             elif path == '/move_body':
                 x = float(data.get('x',0))
                 y = float(data.get('y',0))
                 z = float(data.get('z',0))
-                task_queue.put(('move_body', x, y, z))
-                self.send_response(200)
-                self.send_header('Content-type','application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"message": "Body wird verschoben"}).encode('utf-8'))
-            
+                response = self.queue_task_and_wait(('move_body', x, y, z))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
             else:
-                self.send_error(404,'Not Found')
+                self.send_json_response({"success": False, "error": "Not Found"}, 404)
 
         except Exception as e:
-            self.send_error(500,str(e))
+            self.send_json_response({"success": False, "error": str(e), "traceback": traceback.format_exc()}, 500)
 
 def run_server():
     global httpd
@@ -1700,7 +1634,7 @@ def run(context):
         design = adsk.fusion.Design.cast(app.activeProduct)
 
         if design is None:
-            ui.messageBox("Kein aktives Design geöffnet!")
+            ui.messageBox("No active design open!")
             return
 
         # Initialer Snapshot
@@ -1719,14 +1653,14 @@ def run(context):
         taskThread.daemon = True
         taskThread.start()
 
-        ui.messageBox(f"Fusion HTTP Add-In gestartet! Port 5000.\nParameter geladen: {len(ModelParameterSnapshot)} Modellparameter")
+        ui.messageBox(f"Fusion HTTP Add-In started! Port 5000.\nParameters loaded: {len(ModelParameterSnapshot)} model parameters")
 
         # HTTP-Server starten
         threading.Thread(target=run_server, daemon=True).start()
 
     except:
         try:
-            ui.messageBox('Fehler im Add-In:\n{}'.format(traceback.format_exc()))
+            ui.messageBox('Error in Add-In:\n{}'.format(traceback.format_exc()))
         except:
             pass
 
@@ -1779,6 +1713,6 @@ def stop(context):
         if app:
             ui = app.userInterface
             if ui:
-                ui.messageBox("Fusion HTTP Add-In gestoppt")
+                ui.messageBox("Fusion HTTP Add-In stopped")
     except:
         pass
