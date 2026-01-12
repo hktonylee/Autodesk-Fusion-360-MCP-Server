@@ -188,6 +188,8 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
                 entity_data = get_feature_info_by_token(design, ui, task[1])
             elif task[0] == 'set_body_visibility':
                 entity_data = set_body_visibility_by_token(design, ui, task[1], task[2])
+            elif task[0] == 'list_entities':
+                entity_data = list_entities(design, ui)
             
             # Task completed successfully
             if task_id is not None:
@@ -1843,6 +1845,63 @@ def select_sketch(design,ui,Sketchname):
         if ui :
             ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
 
+def list_entities(design, ui):
+    try:
+        rootComp = design.rootComponent
+        bodies = []
+        for i in range(rootComp.bRepBodies.count):
+            body = rootComp.bRepBodies.item(i)
+            bodies.append({
+                "name": body.name,
+                "index": i,
+                "body_token": getattr(body, "entityToken", None),
+                "is_visible": body.isVisible
+            })
+
+        sketches = []
+        for i in range(rootComp.sketches.count):
+            sketch = rootComp.sketches.item(i)
+            sketches.append({
+                "name": sketch.name,
+                "index": i,
+                "sketch_token": getattr(sketch, "entityToken", None),
+                "is_visible": sketch.isVisible
+            })
+
+        axes = []
+        seen = set()
+
+        def add_axis(axis, axis_type, index):
+            if axis is None:
+                return
+            token = getattr(axis, "entityToken", None)
+            key = token if token else f"{axis_type}:{getattr(axis, 'name', '')}:{index}"
+            if key in seen:
+                return
+            seen.add(key)
+            axes.append({
+                "name": axis.name,
+                "index": index,
+                "axis_token": token,
+                "axis_type": axis_type,
+                "is_visible": getattr(axis, "isVisible", None)
+            })
+
+        add_axis(rootComp.xConstructionAxis, "origin", -1)
+        add_axis(rootComp.yConstructionAxis, "origin", -1)
+        add_axis(rootComp.zConstructionAxis, "origin", -1)
+
+        for i in range(rootComp.constructionAxes.count):
+            axis = rootComp.constructionAxes.item(i)
+            add_axis(axis, "construction", i)
+
+        return {"bodies": bodies, "sketches": sketches, "axes": axes}
+
+    except:
+        if ui:
+            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
+        return {"bodies": [], "sketches": [], "axes": []}
+
 
 # HTTP Server######
 class Handler(BaseHTTPRequestHandler):
@@ -1896,6 +1955,10 @@ class Handler(BaseHTTPRequestHandler):
 
             elif path == '/undo':
                 response = self.queue_task_and_wait(('undo',))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
+            elif path == '/list_entities':
+                response = self.queue_task_and_wait(('list_entities',))
                 self.send_json_response(response, 200 if response.get('success') else 500)
 
             elif path == '/Box':

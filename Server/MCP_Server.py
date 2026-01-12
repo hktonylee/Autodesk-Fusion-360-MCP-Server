@@ -370,6 +370,13 @@ def undo():
     return format_tool_response(response, "undo")
 
 @mcp.tool()
+def list_entities():
+    """Lists all bodies, axes, and sketches in the current model."""
+    endpoint = config.ENDPOINTS["list_entities"]
+    response = send_request(endpoint, {}, {})
+    return format_tool_response(response, "list_entities")
+
+@mcp.tool()
 def count():
     """Counts the parameters in the current model."""
     endpoint = config.ENDPOINTS["count_parameters"]

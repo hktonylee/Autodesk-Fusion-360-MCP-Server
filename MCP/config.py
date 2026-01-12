@@ -15,6 +15,7 @@ ENDPOINTS = {
     "spline": f"{BASE_URL}/spline",
     "sweep": f"{BASE_URL}/sweep",
     "undo": f"{BASE_URL}/undo",
+    "list_entities": f"{BASE_URL}/list_entities",
     "count_parameters": f"{BASE_URL}/count_parameters",
     "list_parameters": f"{BASE_URL}/list_parameters",
     "export_step": f"{BASE_URL}/Export_STEP",
