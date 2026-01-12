@@ -8,6 +8,7 @@ import queue
 from pathlib import Path
 import math
 import os
+from .config import SERVER_HOST, SERVER_PORT
 
 ModelParameterSnapshot = []
 httpd = None
@@ -1621,7 +1622,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def run_server():
     global httpd
-    server_address = ('localhost',5000)
+    server_address = (SERVER_HOST, SERVER_PORT)
     httpd = HTTPServer(server_address, Handler)
     httpd.serve_forever()
 
@@ -1653,7 +1654,7 @@ def run(context):
         taskThread.daemon = True
         taskThread.start()
 
-        ui.messageBox(f"Fusion HTTP Add-In started! Port 5000.\nParameters loaded: {len(ModelParameterSnapshot)} model parameters")
+        ui.messageBox(f"Fusion HTTP Add-In started! Port {SERVER_PORT}.\nParameters loaded: {len(ModelParameterSnapshot)} model parameters")
 
         # HTTP-Server starten
         threading.Thread(target=run_server, daemon=True).start()
