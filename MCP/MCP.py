@@ -26,15 +26,24 @@ stopFlag = None
 myCustomEvent = 'MCPTaskEvent'
 customEvent = None
 
-def set_task_response(task_id, success, message, error=None):
-    """Store task response in the response dictionary"""
+def set_task_response(task_id, success, message, error=None, entity_data=None):
+    """Store task response in the response dictionary
+    
+    Args:
+        task_id: Unique identifier for the task
+        success: Whether the task succeeded
+        message: Response message
+        error: Error details if failed
+        entity_data: Dict containing entity info (entityToken, name, bodies, etc.)
+    """
     global response_dict, response_lock
     with response_lock:
         response_dict[task_id] = {
             'success': success,
             'message': message,
             'error': error,
-            'completed': True
+            'completed': True,
+            'entity_data': entity_data
         }
 
 def get_task_response(task_id, timeout=5.0):
@@ -95,12 +104,13 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
         # Extract task_id (always the last element)
         task_id = task[-1] if len(task) > 0 and isinstance(task[-1], int) else None
         task_name = task[0] if len(task) > 0 else 'unknown'
+        entity_data = None  # Will store entity info from functions that return it
         
         try:
             if task[0] == 'set_parameter':
                 set_parameter(design, ui, task[1], task[2])
             elif task[0] == 'draw_box':
-                draw_Box(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7])
+                entity_data = draw_Box(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7])
             elif task[0] == 'draw_witzenmann':
                 draw_Witzenmann(design, ui, task[1],task[2])
             elif task[0] == 'export_stl':
@@ -110,7 +120,7 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
             elif task[0] == 'export_step':
                 export_as_STEP(design, ui, task[1])
             elif task[0] == 'draw_cylinder':
-                draw_cylinder(design, ui, task[1], task[2], task[3], task[4], task[5],task[6])
+                entity_data = draw_cylinder(design, ui, task[1], task[2], task[3], task[4], task[5],task[6])
             elif task[0] == 'shell_body':
                 shell_existing_body(design, ui, task[1], task[2])
             elif task[0] == 'undo':
@@ -118,7 +128,7 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
             elif task[0] == 'draw_lines':
                 draw_lines(design, ui, task[1], task[2])
             elif task[0] == 'extrude_last_sketch':
-                extrude_last_sketch(design, ui, task[1],task[2])
+                entity_data = extrude_last_sketch(design, ui, task[1],task[2])
             elif task[0] == 'revolve_profile':
                 revolve_profile(design, ui,  task[1])        
             elif task[0] == 'arc':
@@ -130,7 +140,7 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
             elif task[0] == 'circle':
                 draw_circle(design, ui, task[1], task[2], task[3], task[4],task[5])
             elif task[0] == 'extrude_thin':
-                extrude_thin(design, ui, task[1],task[2])
+                entity_data = extrude_thin(design, ui, task[1],task[2])
             elif task[0] == 'select_body':
                 select_body(design, ui, task[1])
             elif task[0] == 'select_sketch':
@@ -138,7 +148,7 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
             elif task[0] == 'spline':
                 spline(design, ui, task[1], task[2])
             elif task[0] == 'sweep':
-                sweep(design, ui)
+                entity_data = sweep(design, ui)
             elif task[0] == 'cut_extrude':
                 cut_extrude(design,ui,task[1])
             elif task[0] == 'circular_pattern':
@@ -146,11 +156,11 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
             elif task[0] == 'offsetplane':
                 offsetplane(design,ui,task[1],task[2])
             elif task[0] == 'loft':
-                loft(design, ui, task[1])
+                entity_data = loft(design, ui, task[1])
             elif task[0] == 'ellipsis':
                 draw_ellipis(design,ui,task[1],task[2],task[3],task[4],task[5],task[6],task[7],task[8],task[9],task[10])
             elif task[0] == 'draw_sphere':
-                create_sphere(design, ui, task[1], task[2], task[3], task[4])
+                entity_data = create_sphere(design, ui, task[1], task[2], task[3], task[4])
             elif task[0] == 'threaded':
                 create_thread(design, ui, task[1], task[2])
             elif task[0] == 'delete_everything':
@@ -162,13 +172,26 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
             elif task[0] == 'rectangular_pattern':
                 rect_pattern(design,ui,task[1],task[2],task[3],task[4],task[5],task[6],task[7])
             elif task[0] == 'draw_text':
-                draw_text(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7], task[8], task[9],task[10])
+                entity_data = draw_text(design, ui, task[1], task[2], task[3], task[4], task[5], task[6], task[7], task[8], task[9],task[10])
             elif task[0] == 'move_body':
                 move_last_body(design,ui,task[1],task[2],task[3])
+            # Entity editing functions (using entity tokens)
+            elif task[0] == 'move_body_by_token':
+                entity_data = move_body_by_token(design, ui, task[1], task[2], task[3], task[4])
+            elif task[0] == 'delete_body_by_token':
+                entity_data = delete_body_by_token(design, ui, task[1])
+            elif task[0] == 'edit_extrude_distance':
+                entity_data = edit_extrude_distance(design, ui, task[1], task[2])
+            elif task[0] == 'get_body_info_by_token':
+                entity_data = get_body_info_by_token(design, ui, task[1])
+            elif task[0] == 'get_feature_info_by_token':
+                entity_data = get_feature_info_by_token(design, ui, task[1])
+            elif task[0] == 'set_body_visibility':
+                entity_data = set_body_visibility_by_token(design, ui, task[1], task[2])
             
             # Task completed successfully
             if task_id is not None:
-                set_task_response(task_id, True, f"{task_name} completed successfully")
+                set_task_response(task_id, True, f"{task_name} completed successfully", entity_data=entity_data)
                 
         except Exception as e:
             error_msg = traceback.format_exc()
@@ -196,7 +219,12 @@ class TaskThread(threading.Thread):
 
 def draw_text(design, ui, text, thickness,
               x_1, y_1, z_1, x_2, y_2, z_2, extrusion_value,plane="XY"):
+    """
+    Creates extruded 3D text.
     
+    Returns:
+        dict: Entity data with feature and body information, or None on failure
+    """
     try:
         rootComp = design.rootComponent
         sketches = rootComp.sketches
@@ -225,11 +253,36 @@ def draw_text(design, ui, text, thickness,
         extInput.isSolid = True
         
         # Create the extrusion
-        ext = extrudes.add(extInput)
+        extrudeFeature = extrudes.add(extInput)
+        
+        # Collect entity data for the created feature and bodies
+        entity_data = {
+            'feature_token': extrudeFeature.entityToken,
+            'feature_name': extrudeFeature.name,
+            'feature_type': 'Extrude',
+            'bodies': []
+        }
+        for i in range(extrudeFeature.bodies.count):
+            body = extrudeFeature.bodies.item(i)
+            entity_data['bodies'].append({
+                'body_token': body.entityToken,
+                'body_name': body.name,
+                'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
+            })
+        
+        return entity_data
     except:
         if ui:
             ui.messageBox('Failed draw_text:\n{}'.format(traceback.format_exc()))
+        return None
+
 def create_sphere(design, ui, radius, x, y, z):
+    """
+    Creates a sphere by revolving a circle profile.
+    
+    Returns:
+        dict: Entity data with feature and body information, or None on failure
+    """
     try:
         rootComp = design.rootComponent
         component: adsk.fusion.Component = design.rootComponent
@@ -257,12 +310,29 @@ def create_sphere(design, ui, radius, x, y, z):
         angle = adsk.core.ValueInput.createByReal(2*math.pi)
         revInput.setAngleExtent(False, angle)
         # Create the extrusion.
-        ext = revolves.add(revInput)
+        revolveFeature = revolves.add(revInput)
         
+        # Collect entity data for the created feature and bodies
+        entity_data = {
+            'feature_token': revolveFeature.entityToken,
+            'feature_name': revolveFeature.name,
+            'feature_type': 'Revolve',
+            'bodies': []
+        }
+        for i in range(revolveFeature.bodies.count):
+            body = revolveFeature.bodies.item(i)
+            entity_data['bodies'].append({
+                'body_token': body.entityToken,
+                'body_name': body.name,
+                'body_index': rootComp.bRepBodies.count - revolveFeature.bodies.count + i
+            })
+        
+        return entity_data
         
     except:
         if ui :
             ui.messageBox('Failed create_sphere:\n{}'.format(traceback.format_exc()))
+        return None
 
 
 
@@ -272,6 +342,9 @@ def draw_Box(design, ui, height, width, depth,x,y,z, plane=None):
     """
     Draws Box with given dimensions height, width, depth at position (x,y,z)
     z creates an offset construction plane
+    
+    Returns:
+        dict: Entity data with feature and body information, or None on failure
     """
     try:
         rootComp = design.rootComponent
@@ -307,10 +380,28 @@ def draw_Box(design, ui, height, width, depth,x,y,z, plane=None):
         extInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
         distance = adsk.core.ValueInput.createByReal(depth)
         extInput.setDistanceExtent(False, distance)
-        extrudes.add(extInput)
+        extrudeFeature = extrudes.add(extInput)
+        
+        # Collect entity data for the created feature and bodies
+        entity_data = {
+            'feature_token': extrudeFeature.entityToken,
+            'feature_name': extrudeFeature.name,
+            'feature_type': 'Extrude',
+            'bodies': []
+        }
+        for i in range(extrudeFeature.bodies.count):
+            body = extrudeFeature.bodies.item(i)
+            entity_data['bodies'].append({
+                'body_token': body.entityToken,
+                'body_name': body.name,
+                'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
+            })
+        
+        return entity_data
     except:
         if ui:
             ui.messageBox('Failed draw_Box:\n{}'.format(traceback.format_exc()))
+        return None
 
 def draw_ellipis(design,ui,x_center,y_center,z_center,
                  x_major, y_major,z_major,x_through,y_through,z_through,plane ="XY"):
@@ -530,6 +621,317 @@ def move_last_body(design,ui,x,y,z):
             ui.messageBox('Failed to move the body:\n{}'.format(traceback.format_exc()))
 
 
+##############################################################################################
+###Entity Editing Functions (using entity tokens)######
+
+def find_entity_by_token(design, token):
+    """
+    Helper function to find an entity by its entityToken.
+    
+    Args:
+        design: The active Fusion design
+        token: The entityToken string
+        
+    Returns:
+        The entity if found, None otherwise
+    """
+    try:
+        entities = design.findEntityByToken(token)
+        if entities and len(entities) > 0:
+            return entities[0]
+        return None
+    except:
+        return None
+
+
+def move_body_by_token(design, ui, body_token, x, y, z):
+    """
+    Move a body identified by its entityToken.
+    
+    Args:
+        design: The active Fusion design
+        ui: The user interface object
+        body_token: The entityToken of the body to move
+        x, y, z: Translation distances
+        
+    Returns:
+        dict: Entity data with updated body information, or None on failure
+    """
+    try:
+        rootComp = design.rootComponent
+        features = rootComp.features
+        moveFeats = features.moveFeatures
+        
+        # Find the body by token
+        body = find_entity_by_token(design, body_token)
+        if body is None:
+            if ui:
+                ui.messageBox(f"Body with token not found")
+            return None
+            
+        bodies = adsk.core.ObjectCollection.create()
+        bodies.add(body)
+        
+        vector = adsk.core.Vector3D.create(x, y, z)
+        transform = adsk.core.Matrix3D.create()
+        transform.translation = vector
+        moveFeatureInput = moveFeats.createInput2(bodies)
+        moveFeatureInput.defineAsFreeMove(transform)
+        moveFeature = moveFeats.add(moveFeatureInput)
+        
+        # Return updated entity data
+        entity_data = {
+            'feature_token': moveFeature.entityToken,
+            'feature_name': moveFeature.name,
+            'feature_type': 'Move',
+            'moved_body_token': body.entityToken,
+            'moved_body_name': body.name
+        }
+        return entity_data
+        
+    except:
+        if ui:
+            ui.messageBox('Failed move_body_by_token:\n{}'.format(traceback.format_exc()))
+        return None
+
+
+def delete_body_by_token(design, ui, body_token):
+    """
+    Delete a body identified by its entityToken.
+    
+    Args:
+        design: The active Fusion design
+        ui: The user interface object
+        body_token: The entityToken of the body to delete
+        
+    Returns:
+        dict: Status information, or None on failure
+    """
+    try:
+        rootComp = design.rootComponent
+        
+        # Find the body by token
+        body = find_entity_by_token(design, body_token)
+        if body is None:
+            if ui:
+                ui.messageBox(f"Body with token not found")
+            return None
+        
+        body_name = body.name
+        removeFeats = rootComp.features.removeFeatures
+        removeFeats.add(body)
+        
+        return {
+            'deleted_body_name': body_name,
+            'deleted_body_token': body_token
+        }
+        
+    except:
+        if ui:
+            ui.messageBox('Failed delete_body_by_token:\n{}'.format(traceback.format_exc()))
+        return None
+
+
+def edit_extrude_distance(design, ui, feature_token, new_distance):
+    """
+    Modify the extrusion distance of an extrude feature.
+    
+    Args:
+        design: The active Fusion design
+        ui: The user interface object
+        feature_token: The entityToken of the extrude feature
+        new_distance: The new distance value (in cm)
+        
+    Returns:
+        dict: Updated entity data, or None on failure
+    """
+    try:
+        rootComp = design.rootComponent
+        
+        # Find the feature by token
+        feature = find_entity_by_token(design, feature_token)
+        if feature is None:
+            if ui:
+                ui.messageBox(f"Feature with token not found")
+            return None
+        
+        # Check if it's an extrude feature
+        if not hasattr(feature, 'extentOne'):
+            if ui:
+                ui.messageBox("Feature is not an extrude feature")
+            return None
+        
+        # Get the extent definition and modify it
+        extentDef = feature.extentOne
+        if hasattr(extentDef, 'distance'):
+            extentDef.distance.value = new_distance
+        
+        # Return updated entity data
+        entity_data = {
+            'feature_token': feature.entityToken,
+            'feature_name': feature.name,
+            'feature_type': 'Extrude',
+            'new_distance': new_distance,
+            'bodies': []
+        }
+        for i in range(feature.bodies.count):
+            body = feature.bodies.item(i)
+            entity_data['bodies'].append({
+                'body_token': body.entityToken,
+                'body_name': body.name
+            })
+        
+        return entity_data
+        
+    except:
+        if ui:
+            ui.messageBox('Failed edit_extrude_distance:\n{}'.format(traceback.format_exc()))
+        return None
+
+
+def get_body_info_by_token(design, ui, body_token):
+    """
+    Get detailed information about a body by its entityToken.
+    
+    Args:
+        design: The active Fusion design
+        ui: The user interface object
+        body_token: The entityToken of the body
+        
+    Returns:
+        dict: Body information including bounding box, volume, etc.
+    """
+    try:
+        # Find the body by token
+        body = find_entity_by_token(design, body_token)
+        if body is None:
+            if ui:
+                ui.messageBox(f"Body with token not found")
+            return None
+        
+        # Get bounding box
+        bbox = body.boundingBox
+        min_point = bbox.minPoint
+        max_point = bbox.maxPoint
+        
+        # Calculate volume (in cubic cm)
+        volume = 0
+        if body.isSolid:
+            volume = body.volume
+        
+        # Get face and edge counts
+        face_count = body.faces.count
+        edge_count = body.edges.count
+        
+        entity_data = {
+            'body_token': body.entityToken,
+            'body_name': body.name,
+            'is_solid': body.isSolid,
+            'is_visible': body.isVisible,
+            'volume': volume,
+            'face_count': face_count,
+            'edge_count': edge_count,
+            'bounding_box': {
+                'min': {'x': min_point.x, 'y': min_point.y, 'z': min_point.z},
+                'max': {'x': max_point.x, 'y': max_point.y, 'z': max_point.z}
+            }
+        }
+        
+        return entity_data
+        
+    except:
+        if ui:
+            ui.messageBox('Failed get_body_info_by_token:\n{}'.format(traceback.format_exc()))
+        return None
+
+
+def get_feature_info_by_token(design, ui, feature_token):
+    """
+    Get detailed information about a feature by its entityToken.
+    
+    Args:
+        design: The active Fusion design
+        ui: The user interface object
+        feature_token: The entityToken of the feature
+        
+    Returns:
+        dict: Feature information
+    """
+    try:
+        # Find the feature by token
+        feature = find_entity_by_token(design, feature_token)
+        if feature is None:
+            if ui:
+                ui.messageBox(f"Feature with token not found")
+            return None
+        
+        entity_data = {
+            'feature_token': feature.entityToken,
+            'feature_name': feature.name,
+            'is_suppressed': feature.isSuppressed if hasattr(feature, 'isSuppressed') else False,
+            'bodies': []
+        }
+        
+        # Get associated bodies if available
+        if hasattr(feature, 'bodies'):
+            for i in range(feature.bodies.count):
+                body = feature.bodies.item(i)
+                entity_data['bodies'].append({
+                    'body_token': body.entityToken,
+                    'body_name': body.name
+                })
+        
+        # Get extent info for extrude features
+        if hasattr(feature, 'extentOne'):
+            extentDef = feature.extentOne
+            if hasattr(extentDef, 'distance'):
+                entity_data['distance'] = extentDef.distance.value
+        
+        return entity_data
+        
+    except:
+        if ui:
+            ui.messageBox('Failed get_feature_info_by_token:\n{}'.format(traceback.format_exc()))
+        return None
+
+
+def set_body_visibility_by_token(design, ui, body_token, is_visible):
+    """
+    Set the visibility of a body by its entityToken.
+    
+    Args:
+        design: The active Fusion design
+        ui: The user interface object
+        body_token: The entityToken of the body
+        is_visible: Boolean for visibility state
+        
+    Returns:
+        dict: Status information
+    """
+    try:
+        # Find the body by token
+        body = find_entity_by_token(design, body_token)
+        if body is None:
+            if ui:
+                ui.messageBox(f"Body with token not found")
+            return None
+        
+        body.isVisible = is_visible
+        
+        return {
+            'body_token': body.entityToken,
+            'body_name': body.name,
+            'is_visible': body.isVisible
+        }
+        
+    except:
+        if ui:
+            ui.messageBox('Failed set_body_visibility_by_token:\n{}'.format(traceback.format_exc()))
+        return None
+
+
+##############################################################################################
+
 def offsetplane(design,ui,offset,plane ="XY"):
 
     """,
@@ -747,6 +1149,9 @@ def draw_one_line(design, ui, x1, y1, z1, x2, y2, z2, plane="XY"):
 def loft(design, ui, sketchcount):
     """
     Creates a loft between the last 'sketchcount' sketches
+    
+    Returns:
+        dict: Entity data with feature and body information, or None on failure
     """
     try:
         rootComp = design.rootComponent
@@ -767,11 +1172,29 @@ def loft(design, ui, sketchcount):
         loftInput.isTangentEdgesMerged = True
         
         # Create loft feature
-        loftFeatures.add(loftInput)
+        loftFeature = loftFeatures.add(loftInput)
+        
+        # Collect entity data for the created feature and bodies
+        entity_data = {
+            'feature_token': loftFeature.entityToken,
+            'feature_name': loftFeature.name,
+            'feature_type': 'Loft',
+            'bodies': []
+        }
+        for i in range(loftFeature.bodies.count):
+            body = loftFeature.bodies.item(i)
+            entity_data['bodies'].append({
+                'body_token': body.entityToken,
+                'body_name': body.name,
+                'body_index': rootComp.bRepBodies.count - loftFeature.bodies.count + i
+            })
+        
+        return entity_data
         
     except:
         if ui:
             ui.messageBox('Failed loft:\n{}'.format(traceback.format_exc()))
+        return None
 
 
 
@@ -820,6 +1243,13 @@ def boolean_operation(design,ui,op):
 
 
 def sweep(design,ui):
+    """
+    Creates a sweep feature using the last two sketches.
+    
+    Returns:
+        dict: Entity data with feature and body information, or None on failure
+    """
+    try:
         rootComp = design.rootComponent
         sketches = rootComp.sketches
         sweeps = rootComp.features.sweepFeatures
@@ -835,12 +1265,36 @@ def sweep(design,ui):
     
         path = adsk.fusion.Path.create(pathCurves, 0) # connec
         sweepInput = sweeps.createInput(prof, path, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        sweeps.add(sweepInput)
+        sweepFeature = sweeps.add(sweepInput)
+        
+        # Collect entity data for the created feature and bodies
+        entity_data = {
+            'feature_token': sweepFeature.entityToken,
+            'feature_name': sweepFeature.name,
+            'feature_type': 'Sweep',
+            'bodies': []
+        }
+        for i in range(sweepFeature.bodies.count):
+            body = sweepFeature.bodies.item(i)
+            entity_data['bodies'].append({
+                'body_token': body.entityToken,
+                'body_name': body.name,
+                'body_index': rootComp.bRepBodies.count - sweepFeature.bodies.count + i
+            })
+        
+        return entity_data
+    except:
+        if ui:
+            ui.messageBox('Failed sweep:\n{}'.format(traceback.format_exc()))
+        return None
 
 
 def extrude_last_sketch(design, ui, value,taperangle):
     """
     Just extrudes the last sketch by the given value
+    
+    Returns:
+        dict: Entity data with feature and body information, or None on failure
     """
     try:
         rootComp = design.rootComponent 
@@ -859,10 +1313,28 @@ def extrude_last_sketch(design, ui, value,taperangle):
         else:
             extrudeInput.setDistanceExtent(False, distance)
         
-        extrudes.add(extrudeInput)
+        extrudeFeature = extrudes.add(extrudeInput)
+        
+        # Collect entity data for the created feature and bodies
+        entity_data = {
+            'feature_token': extrudeFeature.entityToken,
+            'feature_name': extrudeFeature.name,
+            'feature_type': 'Extrude',
+            'bodies': []
+        }
+        for i in range(extrudeFeature.bodies.count):
+            body = extrudeFeature.bodies.item(i)
+            entity_data['bodies'].append({
+                'body_token': body.entityToken,
+                'body_name': body.name,
+                'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
+            })
+        
+        return entity_data
     except:
         if ui:
             ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
+        return None
 
 def shell_existing_body(design, ui, thickness=0.5, faceindex=0):
     """
@@ -1123,26 +1595,57 @@ def cut_extrude(design,ui,depth):
 
 
 def extrude_thin(design, ui, thickness,distance):
-    rootComp = design.rootComponent
-    sketches = rootComp.sketches
+    """
+    Creates a thin-walled extrusion from the last sketch.
     
-    #ui.messageBox('Select a face for the extrusion.')
-    #selectedFace = ui.selectEntity('Select a face for the extrusion.', 'Profiles').entity
-    selectedFace = sketches.item(sketches.count - 1).profiles.item(0)
-    exts = rootComp.features.extrudeFeatures
-    extInput = exts.createInput(selectedFace, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-    extInput.setThinExtrude(adsk.fusion.ThinExtrudeWallLocation.Center,
-                            adsk.core.ValueInput.createByReal(thickness))
+    Returns:
+        dict: Entity data with feature and body information, or None on failure
+    """
+    try:
+        rootComp = design.rootComponent
+        sketches = rootComp.sketches
+        
+        #ui.messageBox('Select a face for the extrusion.')
+        #selectedFace = ui.selectEntity('Select a face for the extrusion.', 'Profiles').entity
+        selectedFace = sketches.item(sketches.count - 1).profiles.item(0)
+        exts = rootComp.features.extrudeFeatures
+        extInput = exts.createInput(selectedFace, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        extInput.setThinExtrude(adsk.fusion.ThinExtrudeWallLocation.Center,
+                                adsk.core.ValueInput.createByReal(thickness))
 
-    distanceExtent = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(distance))
-    extInput.setOneSideExtent(distanceExtent, adsk.fusion.ExtentDirections.PositiveExtentDirection)
+        distanceExtent = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(distance))
+        extInput.setOneSideExtent(distanceExtent, adsk.fusion.ExtentDirections.PositiveExtentDirection)
 
-    ext = exts.add(extInput)
+        extrudeFeature = exts.add(extInput)
+        
+        # Collect entity data for the created feature and bodies
+        entity_data = {
+            'feature_token': extrudeFeature.entityToken,
+            'feature_name': extrudeFeature.name,
+            'feature_type': 'ExtrudeThin',
+            'bodies': []
+        }
+        for i in range(extrudeFeature.bodies.count):
+            body = extrudeFeature.bodies.item(i)
+            entity_data['bodies'].append({
+                'body_token': body.entityToken,
+                'body_name': body.name,
+                'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
+            })
+        
+        return entity_data
+    except:
+        if ui:
+            ui.messageBox('Failed extrude_thin:\n{}'.format(traceback.format_exc()))
+        return None
 
 
 def draw_cylinder(design, ui, radius, height, x,y,z,plane = "XY"):
     """
     Draws a cylinder with given radius and height at position (x,y,z)
+    
+    Returns:
+        dict: Entity data with feature and body information, or None on failure
     """
     try:
         rootComp = design.rootComponent
@@ -1163,11 +1666,29 @@ def draw_cylinder(design, ui, radius, height, x,y,z,plane = "XY"):
         extInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
         distance = adsk.core.ValueInput.createByReal(height)
         extInput.setDistanceExtent(False, distance)
-        extrudes.add(extInput)
+        extrudeFeature = extrudes.add(extInput)
+        
+        # Collect entity data for the created feature and bodies
+        entity_data = {
+            'feature_token': extrudeFeature.entityToken,
+            'feature_name': extrudeFeature.name,
+            'feature_type': 'Extrude',
+            'bodies': []
+        }
+        for i in range(extrudeFeature.bodies.count):
+            body = extrudeFeature.bodies.item(i)
+            entity_data['bodies'].append({
+                'body_token': body.entityToken,
+                'body_name': body.name,
+                'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
+            })
+        
+        return entity_data
 
     except:
         if ui:
             ui.messageBox('Failed draw_cylinder:\n{}'.format(traceback.format_exc()))
+        return None
 
 
 
@@ -1612,6 +2133,42 @@ class Handler(BaseHTTPRequestHandler):
                 y = float(data.get('y',0))
                 z = float(data.get('z',0))
                 response = self.queue_task_and_wait(('move_body', x, y, z))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
+            # Entity editing endpoints (using entity tokens)
+            elif path == '/move_body_by_token':
+                body_token = str(data.get('body_token'))
+                x = float(data.get('x', 0))
+                y = float(data.get('y', 0))
+                z = float(data.get('z', 0))
+                response = self.queue_task_and_wait(('move_body_by_token', body_token, x, y, z))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
+            elif path == '/delete_body_by_token':
+                body_token = str(data.get('body_token'))
+                response = self.queue_task_and_wait(('delete_body_by_token', body_token))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
+            elif path == '/edit_extrude_distance':
+                feature_token = str(data.get('feature_token'))
+                new_distance = float(data.get('new_distance'))
+                response = self.queue_task_and_wait(('edit_extrude_distance', feature_token, new_distance))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
+            elif path == '/get_body_info':
+                body_token = str(data.get('body_token'))
+                response = self.queue_task_and_wait(('get_body_info_by_token', body_token))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
+            elif path == '/get_feature_info':
+                feature_token = str(data.get('feature_token'))
+                response = self.queue_task_and_wait(('get_feature_info_by_token', feature_token))
+                self.send_json_response(response, 200 if response.get('success') else 500)
+
+            elif path == '/set_body_visibility':
+                body_token = str(data.get('body_token'))
+                is_visible = bool(data.get('is_visible', True))
+                response = self.queue_task_and_wait(('set_body_visibility', body_token, is_visible))
                 self.send_json_response(response, 200 if response.get('success') else 500)
 
             else:

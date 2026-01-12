@@ -196,14 +196,25 @@ def send_request(endpoint, data, headers, timeout=15):
 def format_tool_response(response_data, operation_name):
     """
     Format the response for MCP client.
-    Returns a dict with success status and message.
+    Returns a dict with success status, message, and entity_data if available.
+    
+    entity_data contains identifiers for created objects:
+    - feature_token: Persistent token for the feature (survives file saves)
+    - feature_name: Name of the feature in timeline (e.g., "Extrude1")
+    - feature_type: Type of feature (Extrude, Revolve, Loft, Sweep, etc.)
+    - bodies: List of created bodies with their tokens, names, and indices
     """
     if response_data.get('success'):
-        return {
+        result = {
             "status": "success",
             "operation": operation_name,
             "message": response_data.get('message', f'{operation_name} completed successfully')
         }
+        # Include entity_data if present (for operations that create geometry)
+        entity_data = response_data.get('entity_data')
+        if entity_data:
+            result["entity_data"] = entity_data
+        return result
     else:
         return {
             "status": "error", 
@@ -834,6 +845,157 @@ def loft(sketchcount: int):
     return format_tool_response(response, "loft")
 
 
+##############################################################################################
+# Entity Editing Tools (using entity tokens)
+# These tools allow you to modify existing objects using their unique entity tokens
+##############################################################################################
+
+@mcp.tool()
+def move_body_by_token(body_token: str, x: float, y: float, z: float):
+    """
+    Move a specific body in Fusion 360 using its entity token.
+    The body_token is returned when you create objects (e.g., from draw_box, draw_cylinder).
+    Use this to move a specific body without affecting others.
+    
+    Args:
+        body_token: The unique entity token of the body (from entity_data.bodies[].body_token)
+        x: Translation distance in X direction (cm)
+        y: Translation distance in Y direction (cm)
+        z: Translation distance in Z direction (cm)
+    
+    Returns:
+        Updated entity data with the move feature information
+    """
+    endpoint = config.ENDPOINTS["move_body_by_token"]
+    headers = config.HEADERS
+    data = {
+        "body_token": body_token,
+        "x": x,
+        "y": y,
+        "z": z
+    }
+    response = send_request(endpoint, data, headers)
+    return format_tool_response(response, "move_body_by_token")
+
+
+@mcp.tool()
+def delete_body_by_token(body_token: str):
+    """
+    Delete a specific body in Fusion 360 using its entity token.
+    The body_token is returned when you create objects.
+    
+    Args:
+        body_token: The unique entity token of the body to delete
+    
+    Returns:
+        Status information about the deleted body
+    """
+    endpoint = config.ENDPOINTS["delete_body_by_token"]
+    headers = config.HEADERS
+    data = {
+        "body_token": body_token
+    }
+    response = send_request(endpoint, data, headers)
+    return format_tool_response(response, "delete_body_by_token")
+
+
+@mcp.tool()
+def edit_extrude_distance(feature_token: str, new_distance: float):
+    """
+    Modify the extrusion distance of an existing extrude feature.
+    The feature_token is returned when you create extrusions.
+    
+    Args:
+        feature_token: The unique entity token of the extrude feature (from entity_data.feature_token)
+        new_distance: The new distance value in cm
+    
+    Returns:
+        Updated entity data with the modified feature information
+    """
+    endpoint = config.ENDPOINTS["edit_extrude_distance"]
+    headers = config.HEADERS
+    data = {
+        "feature_token": feature_token,
+        "new_distance": new_distance
+    }
+    response = send_request(endpoint, data, headers)
+    return format_tool_response(response, "edit_extrude_distance")
+
+
+@mcp.tool()
+def get_body_info(body_token: str):
+    """
+    Get detailed information about a body by its entity token.
+    Useful for checking dimensions, volume, and other properties of an existing body.
+    
+    Args:
+        body_token: The unique entity token of the body
+    
+    Returns:
+        Body information including:
+        - body_name, body_token
+        - is_solid, is_visible
+        - volume (cubic cm)
+        - face_count, edge_count
+        - bounding_box (min/max coordinates)
+    """
+    endpoint = config.ENDPOINTS["get_body_info"]
+    headers = config.HEADERS
+    data = {
+        "body_token": body_token
+    }
+    response = send_request(endpoint, data, headers)
+    return format_tool_response(response, "get_body_info")
+
+
+@mcp.tool()
+def get_feature_info(feature_token: str):
+    """
+    Get detailed information about a feature by its entity token.
+    Useful for checking the current state of a feature before modifying it.
+    
+    Args:
+        feature_token: The unique entity token of the feature
+    
+    Returns:
+        Feature information including:
+        - feature_name, feature_token
+        - is_suppressed
+        - bodies (list of associated bodies)
+        - distance (for extrude features)
+    """
+    endpoint = config.ENDPOINTS["get_feature_info"]
+    headers = config.HEADERS
+    data = {
+        "feature_token": feature_token
+    }
+    response = send_request(endpoint, data, headers)
+    return format_tool_response(response, "get_feature_info")
+
+
+@mcp.tool()
+def set_body_visibility(body_token: str, is_visible: bool):
+    """
+    Show or hide a specific body in Fusion 360.
+    
+    Args:
+        body_token: The unique entity token of the body
+        is_visible: True to show the body, False to hide it
+    
+    Returns:
+        Updated visibility status
+    """
+    endpoint = config.ENDPOINTS["set_body_visibility"]
+    headers = config.HEADERS
+    data = {
+        "body_token": body_token,
+        "is_visible": is_visible
+    }
+    response = send_request(endpoint, data, headers)
+    return format_tool_response(response, "set_body_visibility")
+
+
+##############################################################################################
 
 
 @mcp.prompt()
