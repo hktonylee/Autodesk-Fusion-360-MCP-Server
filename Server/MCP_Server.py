@@ -336,7 +336,7 @@ def draw_witzenmannlogo(scale: float = 1.0, z: float = 1.0):
 def spline(points: list, plane: str):
     """
     Draw a spline curve in Fusion 360.
-    You can pass the points as a list of lists.
+    You can pass the points as a 2D list of floats.
     Example: [[0,0,0],[5,0,0],[5,5,5],[0,5,5],[0,0,0]]
     It is essential that you specify the Z coordinate, even if it is 0.
     Unless explicitly requested otherwise, make the lines point upward.

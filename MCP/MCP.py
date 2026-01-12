@@ -16,6 +16,9 @@ task_queue = queue.Queue()  # Queue for thread-safe actions
 response_dict = {}  # Dictionary to store task responses by task_id
 response_lock = threading.Lock()  # Lock for thread-safe access to response_dict
 task_id_counter = 0  # Counter for generating unique task IDs
+last_error = None  # Stores last error message from Fusion-side handlers
+last_error_lock = threading.Lock()  # Lock for thread-safe access to last_error
+original_message_box = None  # Wrapped UI messageBox reference
 
 # Event Handler Variables
 app = None
@@ -45,6 +48,43 @@ def set_task_response(task_id, success, message, error=None, entity_data=None):
             'completed': True,
             'entity_data': entity_data
         }
+
+def record_last_error(message):
+    """Record the last error message so it can be returned to the client."""
+    global last_error, last_error_lock
+    with last_error_lock:
+        last_error = message
+
+def clear_last_error():
+    """Clear any recorded error before starting a new task."""
+    global last_error, last_error_lock
+    with last_error_lock:
+        last_error = None
+
+def get_last_error():
+    """Retrieve the last recorded error."""
+    global last_error, last_error_lock
+    with last_error_lock:
+        return last_error
+
+def wrap_message_box(ui):
+    """Wrap ui.messageBox to capture error messages from Fusion-side handlers."""
+    global original_message_box
+    if ui is None or original_message_box is not None:
+        return
+
+    original_message_box = ui.messageBox
+
+    def message_box_wrapper(message, *args, **kwargs):
+        if isinstance(message, str):
+            normalized = message.strip()
+            if normalized.startswith("Failed") or normalized.startswith("Error"):
+                record_last_error(message)
+                # Suppress error message boxes; errors are returned via MCP response.
+                return None
+        return original_message_box(message, *args, **kwargs)
+
+    ui.messageBox = message_box_wrapper
 
 def get_task_response(task_id, timeout=5.0):
     """Wait for and retrieve task response"""
@@ -107,6 +147,7 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
         entity_data = None  # Will store entity info from functions that return it
         
         try:
+            clear_last_error()
             if task[0] == 'set_parameter':
                 set_parameter(design, ui, task[1], task[2])
             elif task[0] == 'draw_box':
@@ -195,9 +236,13 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
             elif task[0] == 'list_entities':
                 entity_data = list_entities(design, ui)
             
-            # Task completed successfully
+            # If any Fusion-side error was recorded via messageBox, return it
             if task_id is not None:
-                set_task_response(task_id, True, f"{task_name} completed successfully", entity_data=entity_data)
+                error_message = get_last_error()
+                if error_message:
+                    set_task_response(task_id, False, f"{task_name} failed", error=error_message)
+                else:
+                    set_task_response(task_id, True, f"{task_name} completed successfully", entity_data=entity_data)
                 
         except Exception as e:
             error_msg = traceback.format_exc()
@@ -1635,7 +1680,13 @@ def delete(design, ui):
             for i in range(timeline.count - 1, -1, -1):
                 item = timeline.item(i)
                 if item:
-                    item.deleteMe()
+                    try:
+                        entity = item.entity
+                        if entity and entity.isValid:
+                            entity.deleteMe()
+                    except:
+                        # Some timeline items are not deletable or lack an entity.
+                        pass
 
         bodies = rootComp.bRepBodies
         removeFeat = rootComp.features.removeFeatures
@@ -2404,6 +2455,7 @@ def run(context):
     try:
         app = adsk.core.Application.get()
         ui = app.userInterface
+        wrap_message_box(ui)
         design = adsk.fusion.Design.cast(app.activeProduct)
 
         if design is None:
