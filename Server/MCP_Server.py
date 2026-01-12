@@ -333,7 +333,7 @@ def draw_witzenmannlogo(scale: float = 1.0, z: float = 1.0):
     return format_tool_response(response, "draw_witzenmannlogo")
 
 @mcp.tool()
-def spline(points: list, plane: str):
+def spline(points: list[list[float]], plane: str):
     """
     Draw a spline curve in Fusion 360.
     You can pass the points as a 2D list of floats.
