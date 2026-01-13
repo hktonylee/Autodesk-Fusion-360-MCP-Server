@@ -276,57 +276,51 @@ def draw_text(design, ui, text, thickness,
     Returns:
         dict: Entity data with feature and body information, or None on failure
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        
-        if plane == "XY":
-            sketch = sketches.add(rootComp.xYConstructionPlane)
-        elif plane == "XZ":
-            sketch = sketches.add(rootComp.xZConstructionPlane)
-        elif plane == "YZ":
-            sketch = sketches.add(rootComp.yZConstructionPlane)
-        point_1 = adsk.core.Point3D.create(x_1, y_1, z_1)
-        point_2 = adsk.core.Point3D.create(x_2, y_2, z_2)
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    
+    if plane == "XY":
+        sketch = sketches.add(rootComp.xYConstructionPlane)
+    elif plane == "XZ":
+        sketch = sketches.add(rootComp.xZConstructionPlane)
+    elif plane == "YZ":
+        sketch = sketches.add(rootComp.yZConstructionPlane)
+    point_1 = adsk.core.Point3D.create(x_1, y_1, z_1)
+    point_2 = adsk.core.Point3D.create(x_2, y_2, z_2)
 
-        texts = sketch.sketchTexts
-        input = texts.createInput2(f"{text}",thickness)
-        input.setAsMultiLine(point_1,
-                             point_2,
-                             adsk.core.HorizontalAlignments.LeftHorizontalAlignment,
-                             adsk.core.VerticalAlignments.TopVerticalAlignment, 0)
-        sketchtext = texts.add(input)
-        extrudes = rootComp.features.extrudeFeatures
-        
-        extInput = extrudes.createInput(sketchtext, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        distance = adsk.core.ValueInput.createByReal(extrusion_value)
-        extInput.setDistanceExtent(False, distance)
-        extInput.isSolid = True
-        
-        # Create the extrusion
-        extrudeFeature = extrudes.add(extInput)
-        
-        # Collect entity data for the created feature and bodies
-        entity_data = {
-            'feature_token': extrudeFeature.entityToken,
-            'feature_name': extrudeFeature.name,
-            'feature_type': 'Extrude',
-            'bodies': []
-        }
-        for i in range(extrudeFeature.bodies.count):
-            body = extrudeFeature.bodies.item(i)
-            entity_data['bodies'].append({
-                'body_token': body.entityToken,
-                'body_name': body.name,
-                'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
-            })
-        
-        return entity_data
-    except:
-        if ui:
-            ui.messageBox('Failed draw_text:\n{}'.format(traceback.format_exc()))
-        return None
-
+    texts = sketch.sketchTexts
+    input = texts.createInput2(f"{text}",thickness)
+    input.setAsMultiLine(point_1,
+                         point_2,
+                         adsk.core.HorizontalAlignments.LeftHorizontalAlignment,
+                         adsk.core.VerticalAlignments.TopVerticalAlignment, 0)
+    sketchtext = texts.add(input)
+    extrudes = rootComp.features.extrudeFeatures
+    
+    extInput = extrudes.createInput(sketchtext, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+    distance = adsk.core.ValueInput.createByReal(extrusion_value)
+    extInput.setDistanceExtent(False, distance)
+    extInput.isSolid = True
+    
+    # Create the extrusion
+    extrudeFeature = extrudes.add(extInput)
+    
+    # Collect entity data for the created feature and bodies
+    entity_data = {
+        'feature_token': extrudeFeature.entityToken,
+        'feature_name': extrudeFeature.name,
+        'feature_type': 'Extrude',
+        'bodies': []
+    }
+    for i in range(extrudeFeature.bodies.count):
+        body = extrudeFeature.bodies.item(i)
+        entity_data['bodies'].append({
+            'body_token': body.entityToken,
+            'body_name': body.name,
+            'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
+        })
+    
+    return entity_data
 def create_sphere(design, ui, radius, x, y, z):
     """
     Creates a sphere by revolving a circle profile.
@@ -334,61 +328,51 @@ def create_sphere(design, ui, radius, x, y, z):
     Returns:
         dict: Entity data with feature and body information, or None on failure
     """
-    try:
-        rootComp = design.rootComponent
-        component: adsk.fusion.Component = design.rootComponent
-        # Create a new sketch on the xy plane.
-        sketches = rootComp.sketches
-        
-        xyPlane =  rootComp.xYConstructionPlane
-        sketch = sketches.add(xyPlane)
-        # Draw a circle.
-        circles = sketch.sketchCurves.sketchCircles
-        circles.addByCenterRadius(adsk.core.Point3D.create(x,y,z), radius)
-        # Draw a line to use as the axis of revolution.
-        lines = sketch.sketchCurves.sketchLines
-        axisLine = lines.addByTwoPoints(
-            adsk.core.Point3D.create(x - radius, y, z),
-            adsk.core.Point3D.create(x + radius, y, z)
-        )
+    rootComp = design.rootComponent
+    component: adsk.fusion.Component = design.rootComponent
+    # Create a new sketch on the xy plane.
+    sketches = rootComp.sketches
+    
+    xyPlane =  rootComp.xYConstructionPlane
+    sketch = sketches.add(xyPlane)
+    # Draw a circle.
+    circles = sketch.sketchCurves.sketchCircles
+    circles.addByCenterRadius(adsk.core.Point3D.create(x,y,z), radius)
+    # Draw a line to use as the axis of revolution.
+    lines = sketch.sketchCurves.sketchLines
+    axisLine = lines.addByTwoPoints(
+        adsk.core.Point3D.create(x - radius, y, z),
+        adsk.core.Point3D.create(x + radius, y, z)
+    )
 
-        # Get the profile defined by half of the circle.
-        profile = sketch.profiles.item(0)
-        # Create an revolution input for a revolution while specifying the profile and that a new component is to be created
-        revolves = component.features.revolveFeatures
-        revInput = revolves.createInput(profile, axisLine, adsk.fusion.FeatureOperations.NewComponentFeatureOperation)
-        # Define that the extent is an angle of 2*pi to get a sphere
-        angle = adsk.core.ValueInput.createByReal(2*math.pi)
-        revInput.setAngleExtent(False, angle)
-        # Create the extrusion.
-        revolveFeature = revolves.add(revInput)
-        
-        # Collect entity data for the created feature and bodies
-        entity_data = {
-            'feature_token': revolveFeature.entityToken,
-            'feature_name': revolveFeature.name,
-            'feature_type': 'Revolve',
-            'bodies': []
-        }
-        for i in range(revolveFeature.bodies.count):
-            body = revolveFeature.bodies.item(i)
-            entity_data['bodies'].append({
-                'body_token': body.entityToken,
-                'body_name': body.name,
-                'body_index': rootComp.bRepBodies.count - revolveFeature.bodies.count + i
-            })
-        
-        return entity_data
-        
-    except:
-        if ui :
-            ui.messageBox('Failed create_sphere:\n{}'.format(traceback.format_exc()))
-        return None
-
-
-
-
-
+    # Get the profile defined by half of the circle.
+    profile = sketch.profiles.item(0)
+    # Create an revolution input for a revolution while specifying the profile and that a new component is to be created
+    revolves = component.features.revolveFeatures
+    revInput = revolves.createInput(profile, axisLine, adsk.fusion.FeatureOperations.NewComponentFeatureOperation)
+    # Define that the extent is an angle of 2*pi to get a sphere
+    angle = adsk.core.ValueInput.createByReal(2*math.pi)
+    revInput.setAngleExtent(False, angle)
+    # Create the extrusion.
+    revolveFeature = revolves.add(revInput)
+    
+    # Collect entity data for the created feature and bodies
+    entity_data = {
+        'feature_token': revolveFeature.entityToken,
+        'feature_name': revolveFeature.name,
+        'feature_type': 'Revolve',
+        'bodies': []
+    }
+    for i in range(revolveFeature.bodies.count):
+        body = revolveFeature.bodies.item(i)
+        entity_data['bodies'].append({
+            'body_token': body.entityToken,
+            'body_name': body.name,
+            'body_index': rootComp.bRepBodies.count - revolveFeature.bodies.count + i
+        })
+    
+    return entity_data
+    
 def draw_Box(design, ui, height, width, depth,x,y,z, plane=None):
     """
     Draws Box with given dimensions height, width, depth at position (x,y,z)
@@ -397,88 +381,77 @@ def draw_Box(design, ui, height, width, depth,x,y,z, plane=None):
     Returns:
         dict: Entity data with feature and body information, or None on failure
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        planes = rootComp.constructionPlanes
-        
-        # Choose base plane based on parameter
-        if plane == 'XZ':
-            basePlane = rootComp.xZConstructionPlane
-        elif plane == 'YZ':
-            basePlane = rootComp.yZConstructionPlane
-        else:
-            basePlane = rootComp.xYConstructionPlane
-        
-        # Create offset plane at z if z != 0
-        if z != 0:
-            planeInput = planes.createInput()
-            offsetValue = adsk.core.ValueInput.createByReal(z)
-            planeInput.setByOffset(basePlane, offsetValue)
-            offsetPlane = planes.add(planeInput)
-            sketch = sketches.add(offsetPlane)
-        else:
-            sketch = sketches.add(basePlane)
-        
-        lines = sketch.sketchCurves.sketchLines
-        # addCenterPointRectangle: (center, corner-relative-to-center)
-        lines.addCenterPointRectangle(
-            adsk.core.Point3D.create(x, y, 0),
-            adsk.core.Point3D.create(x + width/2, y + height/2, 0)
-        )
-        prof = sketch.profiles.item(0)
-        extrudes = rootComp.features.extrudeFeatures
-        extInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        distance = adsk.core.ValueInput.createByReal(depth)
-        extInput.setDistanceExtent(False, distance)
-        extrudeFeature = extrudes.add(extInput)
-        
-        # Collect entity data for the created feature and bodies
-        entity_data = {
-            'feature_token': extrudeFeature.entityToken,
-            'feature_name': extrudeFeature.name,
-            'feature_type': 'Extrude',
-            'bodies': []
-        }
-        for i in range(extrudeFeature.bodies.count):
-            body = extrudeFeature.bodies.item(i)
-            entity_data['bodies'].append({
-                'body_token': body.entityToken,
-                'body_name': body.name,
-                'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
-            })
-        
-        return entity_data
-    except:
-        if ui:
-            ui.messageBox('Failed draw_Box:\n{}'.format(traceback.format_exc()))
-        return None
-
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    planes = rootComp.constructionPlanes
+    
+    # Choose base plane based on parameter
+    if plane == 'XZ':
+        basePlane = rootComp.xZConstructionPlane
+    elif plane == 'YZ':
+        basePlane = rootComp.yZConstructionPlane
+    else:
+        basePlane = rootComp.xYConstructionPlane
+    
+    # Create offset plane at z if z != 0
+    if z != 0:
+        planeInput = planes.createInput()
+        offsetValue = adsk.core.ValueInput.createByReal(z)
+        planeInput.setByOffset(basePlane, offsetValue)
+        offsetPlane = planes.add(planeInput)
+        sketch = sketches.add(offsetPlane)
+    else:
+        sketch = sketches.add(basePlane)
+    
+    lines = sketch.sketchCurves.sketchLines
+    # addCenterPointRectangle: (center, corner-relative-to-center)
+    lines.addCenterPointRectangle(
+        adsk.core.Point3D.create(x, y, 0),
+        adsk.core.Point3D.create(x + width/2, y + height/2, 0)
+    )
+    prof = sketch.profiles.item(0)
+    extrudes = rootComp.features.extrudeFeatures
+    extInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+    distance = adsk.core.ValueInput.createByReal(depth)
+    extInput.setDistanceExtent(False, distance)
+    extrudeFeature = extrudes.add(extInput)
+    
+    # Collect entity data for the created feature and bodies
+    entity_data = {
+        'feature_token': extrudeFeature.entityToken,
+        'feature_name': extrudeFeature.name,
+        'feature_type': 'Extrude',
+        'bodies': []
+    }
+    for i in range(extrudeFeature.bodies.count):
+        body = extrudeFeature.bodies.item(i)
+        entity_data['bodies'].append({
+            'body_token': body.entityToken,
+            'body_name': body.name,
+            'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
+        })
+    
+    return entity_data
 def draw_ellipis(design,ui,x_center,y_center,z_center,
                  x_major, y_major,z_major,x_through,y_through,z_through,plane ="XY"):
     """
     Draws an ellipse on the specified plane using three points.
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        if plane == "XZ":
-            sketch = sketches.add(rootComp.xZConstructionPlane)
-        elif plane == "YZ":
-            sketch = sketches.add(rootComp.yZConstructionPlane)
-        else:
-            sketch = sketches.add(rootComp.xYConstructionPlane)
-        # Always define the points and create the ellipse
-        # Ensure all arguments are floats (Fusion API is strict)
-        centerPoint = adsk.core.Point3D.create(float(x_center), float(y_center), float(z_center))
-        majorAxisPoint = adsk.core.Point3D.create(float(x_major), float(y_major), float(z_major))
-        throughPoint = adsk.core.Point3D.create(float(x_through), float(y_through), float(z_through))
-        sketchEllipse = sketch.sketchCurves.sketchEllipses
-        ellipse = sketchEllipse.add(centerPoint, majorAxisPoint, throughPoint)
-    except:
-        if ui:
-            ui.messageBox('Failed to draw ellipsis:\n{}'.format(traceback.format_exc()))
-
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    if plane == "XZ":
+        sketch = sketches.add(rootComp.xZConstructionPlane)
+    elif plane == "YZ":
+        sketch = sketches.add(rootComp.yZConstructionPlane)
+    else:
+        sketch = sketches.add(rootComp.xYConstructionPlane)
+    # Always define the points and create the ellipse
+    # Ensure all arguments are floats (Fusion API is strict)
+    centerPoint = adsk.core.Point3D.create(float(x_center), float(y_center), float(z_center))
+    majorAxisPoint = adsk.core.Point3D.create(float(x_major), float(y_major), float(z_major))
+    throughPoint = adsk.core.Point3D.create(float(x_through), float(y_through), float(z_through))
+    sketchEllipse = sketch.sketchCurves.sketchEllipses
+    ellipse = sketchEllipse.add(centerPoint, majorAxisPoint, throughPoint)
 def draw_2d_rect(design, ui, x_1, y_1, z_1, x_2, y_2, z_2, plane="XY"):
     rootComp = design.rootComponent
     sketches = rootComp.sketches
@@ -531,60 +504,52 @@ def draw_circle(design, ui, radius, x, y, z, plane="XY"):
     For XZ plane: circle at (x,z) with y offset  
     For YZ plane: circle at (y,z) with x offset
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        planes = rootComp.constructionPlanes
-        
-        # Determine which plane and coordinates to use
-        if plane == "XZ":
-            basePlane = rootComp.xZConstructionPlane
-            # For XZ plane: x and z are in-plane, y is the offset
-            if y != 0:
-                planeInput = planes.createInput()
-                offsetValue = adsk.core.ValueInput.createByReal(y)
-                planeInput.setByOffset(basePlane, offsetValue)
-                offsetPlane = planes.add(planeInput)
-                sketch = sketches.add(offsetPlane)
-            else:
-                sketch = sketches.add(basePlane)
-            centerPoint = adsk.core.Point3D.create(x, z, 0)
-            
-        elif plane == "YZ":
-            basePlane = rootComp.yZConstructionPlane
-            # For YZ plane: y and z are in-plane, x is the offset
-            if x != 0:
-                planeInput = planes.createInput()
-                offsetValue = adsk.core.ValueInput.createByReal(x)
-                planeInput.setByOffset(basePlane, offsetValue)
-                offsetPlane = planes.add(planeInput)
-                sketch = sketches.add(offsetPlane)
-            else:
-                sketch = sketches.add(basePlane)
-            centerPoint = adsk.core.Point3D.create(y, z, 0)
-            
-        else:  # XY plane (default)
-            basePlane = rootComp.xYConstructionPlane
-            # For XY plane: x and y are in-plane, z is the offset
-            if z != 0:
-                planeInput = planes.createInput()
-                offsetValue = adsk.core.ValueInput.createByReal(z)
-                planeInput.setByOffset(basePlane, offsetValue)
-                offsetPlane = planes.add(planeInput)
-                sketch = sketches.add(offsetPlane)
-            else:
-                sketch = sketches.add(basePlane)
-            centerPoint = adsk.core.Point3D.create(x, y, 0)
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    planes = rootComp.constructionPlanes
     
-        circles = sketch.sketchCurves.sketchCircles
-        circles.addByCenterRadius(centerPoint, radius)
-    except:
-        if ui:
-            ui.messageBox('Failed draw_circle:\n{}'.format(traceback.format_exc()))
-
-
-
-
+    # Determine which plane and coordinates to use
+    if plane == "XZ":
+        basePlane = rootComp.xZConstructionPlane
+        # For XZ plane: x and z are in-plane, y is the offset
+        if y != 0:
+            planeInput = planes.createInput()
+            offsetValue = adsk.core.ValueInput.createByReal(y)
+            planeInput.setByOffset(basePlane, offsetValue)
+            offsetPlane = planes.add(planeInput)
+            sketch = sketches.add(offsetPlane)
+        else:
+            sketch = sketches.add(basePlane)
+        centerPoint = adsk.core.Point3D.create(x, z, 0)
+        
+    elif plane == "YZ":
+        basePlane = rootComp.yZConstructionPlane
+        # For YZ plane: y and z are in-plane, x is the offset
+        if x != 0:
+            planeInput = planes.createInput()
+            offsetValue = adsk.core.ValueInput.createByReal(x)
+            planeInput.setByOffset(basePlane, offsetValue)
+            offsetPlane = planes.add(planeInput)
+            sketch = sketches.add(offsetPlane)
+        else:
+            sketch = sketches.add(basePlane)
+        centerPoint = adsk.core.Point3D.create(y, z, 0)
+        
+    else:  # XY plane (default)
+        basePlane = rootComp.xYConstructionPlane
+        # For XY plane: x and y are in-plane, z is the offset
+        if z != 0:
+            planeInput = planes.createInput()
+            offsetValue = adsk.core.ValueInput.createByReal(z)
+            planeInput.setByOffset(basePlane, offsetValue)
+            offsetPlane = planes.add(planeInput)
+            sketch = sketches.add(offsetPlane)
+        else:
+            sketch = sketches.add(basePlane)
+        centerPoint = adsk.core.Point3D.create(x, y, 0)
+    
+    circles = sketch.sketchCurves.sketchCircles
+    circles.addByCenterRadius(centerPoint, radius)
 def draw_sphere(design, ui, radius, x, y, z):
     rootComp = design.rootComponent
     sketches = rootComp.sketches
@@ -598,83 +563,66 @@ def draw_Witzenmann(design, ui,scaling,z):
     can be scaled with scaling factor to make it bigger or smaller
     The z Position can be adjusted with z parameter
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        xyPlane = rootComp.xYConstructionPlane
-        sketch = sketches.add(xyPlane)
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    xyPlane = rootComp.xYConstructionPlane
+    sketch = sketches.add(xyPlane)
 
-        points1 = [
-            (8.283*scaling,10.475*scaling,z),(8.283*scaling,6.471*scaling,z),(-0.126*scaling,6.471*scaling,z),(8.283*scaling,2.691*scaling,z),
-            (8.283*scaling,-1.235*scaling,z),(-0.496*scaling,-1.246*scaling,z),(8.283*scaling,-5.715*scaling,z),(8.283*scaling,-9.996*scaling,z),
-            (-8.862*scaling,-1.247*scaling,z),(-8.859*scaling,2.69*scaling,z),(-0.639*scaling,2.69*scaling,z),(-8.859*scaling,6.409*scaling,z),
-            (-8.859*scaling,10.459*scaling,z)
-        ]
-        for i in range(len(points1)-1):
-            start = adsk.core.Point3D.create(points1[i][0], points1[i][1],points1[i][2])
-            end   = adsk.core.Point3D.create(points1[i+1][0], points1[i+1][1],points1[i+1][2])
-            sketch.sketchCurves.sketchLines.addByTwoPoints(start,end) # Verbindungslinie zeichnen
-        sketch.sketchCurves.sketchLines.addByTwoPoints(
-            adsk.core.Point3D.create(points1[-1][0],points1[-1][1],points1[-1][2]),
-            adsk.core.Point3D.create(points1[0][0],points1[0][1],points1[0][2])
-        )
+    points1 = [
+        (8.283*scaling,10.475*scaling,z),(8.283*scaling,6.471*scaling,z),(-0.126*scaling,6.471*scaling,z),(8.283*scaling,2.691*scaling,z),
+        (8.283*scaling,-1.235*scaling,z),(-0.496*scaling,-1.246*scaling,z),(8.283*scaling,-5.715*scaling,z),(8.283*scaling,-9.996*scaling,z),
+        (-8.862*scaling,-1.247*scaling,z),(-8.859*scaling,2.69*scaling,z),(-0.639*scaling,2.69*scaling,z),(-8.859*scaling,6.409*scaling,z),
+        (-8.859*scaling,10.459*scaling,z)
+    ]
+    for i in range(len(points1)-1):
+        start = adsk.core.Point3D.create(points1[i][0], points1[i][1],points1[i][2])
+        end   = adsk.core.Point3D.create(points1[i+1][0], points1[i+1][1],points1[i+1][2])
+        sketch.sketchCurves.sketchLines.addByTwoPoints(start,end) # Verbindungslinie zeichnen
+    sketch.sketchCurves.sketchLines.addByTwoPoints(
+        adsk.core.Point3D.create(points1[-1][0],points1[-1][1],points1[-1][2]),
+        adsk.core.Point3D.create(points1[0][0],points1[0][1],points1[0][2])
+    )
 
-        points2 = [(-3.391*scaling,-5.989*scaling,z),(5.062*scaling,-10.141*scaling,z),(-8.859*scaling,-10.141*scaling,z),(-8.859*scaling,-5.989*scaling,z)]
-        for i in range(len(points2)-1):
-            start = adsk.core.Point3D.create(points2[i][0], points2[i][1],points2[i][2])
-            end   = adsk.core.Point3D.create(points2[i+1][0], points2[i+1][1],points2[i+1][2])
-            sketch.sketchCurves.sketchLines.addByTwoPoints(start,end)
-        sketch.sketchCurves.sketchLines.addByTwoPoints(
-            adsk.core.Point3D.create(points2[-1][0], points2[-1][1],points2[-1][2]),
-            adsk.core.Point3D.create(points2[0][0], points2[0][1],points2[0][2])
-        )
+    points2 = [(-3.391*scaling,-5.989*scaling,z),(5.062*scaling,-10.141*scaling,z),(-8.859*scaling,-10.141*scaling,z),(-8.859*scaling,-5.989*scaling,z)]
+    for i in range(len(points2)-1):
+        start = adsk.core.Point3D.create(points2[i][0], points2[i][1],points2[i][2])
+        end   = adsk.core.Point3D.create(points2[i+1][0], points2[i+1][1],points2[i+1][2])
+        sketch.sketchCurves.sketchLines.addByTwoPoints(start,end)
+    sketch.sketchCurves.sketchLines.addByTwoPoints(
+        adsk.core.Point3D.create(points2[-1][0], points2[-1][1],points2[-1][2]),
+        adsk.core.Point3D.create(points2[0][0], points2[0][1],points2[0][2])
+    )
 
-        extrudes = rootComp.features.extrudeFeatures
-        distance = adsk.core.ValueInput.createByReal(2.0*scaling)
-        for i in range(sketch.profiles.count):
-            prof = sketch.profiles.item(i)
-            extrudeInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-            extrudeInput.setDistanceExtent(False,distance)
-            extrudes.add(extrudeInput)
-
-    except:
-        if ui:
-            ui.messageBox('Failed draw_Witzenmann:\n{}'.format(traceback.format_exc()))
-##############################################################################################
-###2D Geometry Functions######
-
+    extrudes = rootComp.features.extrudeFeatures
+    distance = adsk.core.ValueInput.createByReal(2.0*scaling)
+    for i in range(sketch.profiles.count):
+        prof = sketch.profiles.item(i)
+        extrudeInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        extrudeInput.setDistanceExtent(False,distance)
+        extrudes.add(extrudeInput)
 
 def move_last_body(design,ui,x,y,z):
     
-    try:
-        rootComp = design.rootComponent
-        features = rootComp.features
-        sketches = rootComp.sketches
-        moveFeats = features.moveFeatures
-        body = rootComp.bRepBodies
-        bodies = adsk.core.ObjectCollection.create()
-        
-        if body.count > 0:
-                latest_body = body.item(body.count - 1)
-                bodies.add(latest_body)
-        else:
-            ui.messageBox("No bodies found.")
-            return
+    rootComp = design.rootComponent
+    features = rootComp.features
+    sketches = rootComp.sketches
+    moveFeats = features.moveFeatures
+    body = rootComp.bRepBodies
+    bodies = adsk.core.ObjectCollection.create()
+    
+    if body.count > 0:
+            latest_body = body.item(body.count - 1)
+            bodies.add(latest_body)
+    else:
+        ui.messageBox("No bodies found.")
+        return
 
-        vector = adsk.core.Vector3D.create(x,y,z)
-        transform = adsk.core.Matrix3D.create()
-        transform.translation = vector
-        moveFeatureInput = moveFeats.createInput2(bodies)
-        moveFeatureInput.defineAsFreeMove(transform)
-        moveFeats.add(moveFeatureInput)
-    except:
-        if ui:
-            ui.messageBox('Failed to move the body:\n{}'.format(traceback.format_exc()))
-
-
-##############################################################################################
-###Entity Editing Functions (using entity tokens)######
-
+    vector = adsk.core.Vector3D.create(x,y,z)
+    transform = adsk.core.Matrix3D.create()
+    transform.translation = vector
+    moveFeatureInput = moveFeats.createInput2(bodies)
+    moveFeatureInput.defineAsFreeMove(transform)
+    moveFeats.add(moveFeatureInput)
 def find_entity_by_token(design, token):
     """
     Helper function to find an entity by its entityToken.
@@ -708,44 +656,37 @@ def move_body_by_token(design, ui, body_token, x, y, z):
     Returns:
         dict: Entity data with updated body information, or None on failure
     """
-    try:
-        rootComp = design.rootComponent
-        features = rootComp.features
-        moveFeats = features.moveFeatures
-        
-        # Find the body by token
-        body = find_entity_by_token(design, body_token)
-        if body is None:
-            if ui:
-                ui.messageBox(f"Body with token not found")
-            return None
-            
-        bodies = adsk.core.ObjectCollection.create()
-        bodies.add(body)
-        
-        vector = adsk.core.Vector3D.create(x, y, z)
-        transform = adsk.core.Matrix3D.create()
-        transform.translation = vector
-        moveFeatureInput = moveFeats.createInput2(bodies)
-        moveFeatureInput.defineAsFreeMove(transform)
-        moveFeature = moveFeats.add(moveFeatureInput)
-        
-        # Return updated entity data
-        entity_data = {
-            'feature_token': moveFeature.entityToken,
-            'feature_name': moveFeature.name,
-            'feature_type': 'Move',
-            'moved_body_token': body.entityToken,
-            'moved_body_name': body.name
-        }
-        return entity_data
-        
-    except:
+    rootComp = design.rootComponent
+    features = rootComp.features
+    moveFeats = features.moveFeatures
+    
+    # Find the body by token
+    body = find_entity_by_token(design, body_token)
+    if body is None:
         if ui:
-            ui.messageBox('Failed move_body_by_token:\n{}'.format(traceback.format_exc()))
+            ui.messageBox(f"Body with token not found")
         return None
-
-
+        
+    bodies = adsk.core.ObjectCollection.create()
+    bodies.add(body)
+    
+    vector = adsk.core.Vector3D.create(x, y, z)
+    transform = adsk.core.Matrix3D.create()
+    transform.translation = vector
+    moveFeatureInput = moveFeats.createInput2(bodies)
+    moveFeatureInput.defineAsFreeMove(transform)
+    moveFeature = moveFeats.add(moveFeatureInput)
+    
+    # Return updated entity data
+    entity_data = {
+        'feature_token': moveFeature.entityToken,
+        'feature_name': moveFeature.name,
+        'feature_type': 'Move',
+        'moved_body_token': body.entityToken,
+        'moved_body_name': body.name
+    }
+    return entity_data
+    
 def delete_body_by_token(design, ui, body_token):
     """
     Delete a body identified by its entityToken.
@@ -758,31 +699,24 @@ def delete_body_by_token(design, ui, body_token):
     Returns:
         dict: Status information, or None on failure
     """
-    try:
-        rootComp = design.rootComponent
-        
-        # Find the body by token
-        body = find_entity_by_token(design, body_token)
-        if body is None:
-            if ui:
-                ui.messageBox(f"Body with token not found")
-            return None
-        
-        body_name = body.name
-        removeFeats = rootComp.features.removeFeatures
-        removeFeats.add(body)
-        
-        return {
-            'deleted_body_name': body_name,
-            'deleted_body_token': body_token
-        }
-        
-    except:
+    rootComp = design.rootComponent
+    
+    # Find the body by token
+    body = find_entity_by_token(design, body_token)
+    if body is None:
         if ui:
-            ui.messageBox('Failed delete_body_by_token:\n{}'.format(traceback.format_exc()))
+            ui.messageBox(f"Body with token not found")
         return None
-
-
+    
+    body_name = body.name
+    removeFeats = rootComp.features.removeFeatures
+    removeFeats.add(body)
+    
+    return {
+        'deleted_body_name': body_name,
+        'deleted_body_token': body_token
+    }
+    
 def delete_entity_by_token(design, ui, entity_token):
     """
     Delete an entity identified by its entityToken.
@@ -795,34 +729,27 @@ def delete_entity_by_token(design, ui, entity_token):
     Returns:
         dict: Status information, or None on failure
     """
-    try:
-        rootComp = design.rootComponent
-        entity = find_entity_by_token(design, entity_token)
-        if entity is None:
-            if ui:
-                ui.messageBox("Entity with token not found")
-            return None
-
-        entity_name = getattr(entity, "name", "")
-        entity_type = getattr(entity, "objectType", "")
-
-        if entity_type == adsk.fusion.BRepBody.classType():
-            removeFeats = rootComp.features.removeFeatures
-            removeFeats.add(entity)
-        else:
-            entity.deleteMe()
-
-        return {
-            "deleted_entity_name": entity_name,
-            "deleted_entity_token": entity_token,
-            "deleted_entity_type": entity_type,
-        }
-    except:
+    rootComp = design.rootComponent
+    entity = find_entity_by_token(design, entity_token)
+    if entity is None:
         if ui:
-            ui.messageBox('Failed delete_entity_by_token:\n{}'.format(traceback.format_exc()))
+            ui.messageBox("Entity with token not found")
         return None
 
+    entity_name = getattr(entity, "name", "")
+    entity_type = getattr(entity, "objectType", "")
 
+    if entity_type == adsk.fusion.BRepBody.classType():
+        removeFeats = rootComp.features.removeFeatures
+        removeFeats.add(entity)
+    else:
+        entity.deleteMe()
+
+    return {
+        "deleted_entity_name": entity_name,
+        "deleted_entity_token": entity_token,
+        "deleted_entity_type": entity_type,
+    }
 def edit_extrude_distance(design, ui, feature_token, new_distance):
     """
     Modify the extrusion distance of an extrude feature.
@@ -836,50 +763,43 @@ def edit_extrude_distance(design, ui, feature_token, new_distance):
     Returns:
         dict: Updated entity data, or None on failure
     """
-    try:
-        rootComp = design.rootComponent
-        
-        # Find the feature by token
-        feature = find_entity_by_token(design, feature_token)
-        if feature is None:
-            if ui:
-                ui.messageBox(f"Feature with token not found")
-            return None
-        
-        # Check if it's an extrude feature
-        if not hasattr(feature, 'extentOne'):
-            if ui:
-                ui.messageBox("Feature is not an extrude feature")
-            return None
-        
-        # Get the extent definition and modify it
-        extentDef = feature.extentOne
-        if hasattr(extentDef, 'distance'):
-            extentDef.distance.value = new_distance
-        
-        # Return updated entity data
-        entity_data = {
-            'feature_token': feature.entityToken,
-            'feature_name': feature.name,
-            'feature_type': 'Extrude',
-            'new_distance': new_distance,
-            'bodies': []
-        }
-        for i in range(feature.bodies.count):
-            body = feature.bodies.item(i)
-            entity_data['bodies'].append({
-                'body_token': body.entityToken,
-                'body_name': body.name
-            })
-        
-        return entity_data
-        
-    except:
+    rootComp = design.rootComponent
+    
+    # Find the feature by token
+    feature = find_entity_by_token(design, feature_token)
+    if feature is None:
         if ui:
-            ui.messageBox('Failed edit_extrude_distance:\n{}'.format(traceback.format_exc()))
+            ui.messageBox(f"Feature with token not found")
         return None
-
-
+    
+    # Check if it's an extrude feature
+    if not hasattr(feature, 'extentOne'):
+        if ui:
+            ui.messageBox("Feature is not an extrude feature")
+        return None
+    
+    # Get the extent definition and modify it
+    extentDef = feature.extentOne
+    if hasattr(extentDef, 'distance'):
+        extentDef.distance.value = new_distance
+    
+    # Return updated entity data
+    entity_data = {
+        'feature_token': feature.entityToken,
+        'feature_name': feature.name,
+        'feature_type': 'Extrude',
+        'new_distance': new_distance,
+        'bodies': []
+    }
+    for i in range(feature.bodies.count):
+        body = feature.bodies.item(i)
+        entity_data['bodies'].append({
+            'body_token': body.entityToken,
+            'body_name': body.name
+        })
+    
+    return entity_data
+    
 def get_body_info_by_token(design, ui, body_token):
     """
     Get detailed information about a body by its entityToken.
@@ -892,50 +812,43 @@ def get_body_info_by_token(design, ui, body_token):
     Returns:
         dict: Body information including bounding box, volume, etc.
     """
-    try:
-        # Find the body by token
-        body = find_entity_by_token(design, body_token)
-        if body is None:
-            if ui:
-                ui.messageBox(f"Body with token not found")
-            return None
-        
-        # Get bounding box
-        bbox = body.boundingBox
-        min_point = bbox.minPoint
-        max_point = bbox.maxPoint
-        
-        # Calculate volume (in cubic cm)
-        volume = 0
-        if body.isSolid:
-            volume = body.volume
-        
-        # Get face and edge counts
-        face_count = body.faces.count
-        edge_count = body.edges.count
-        
-        entity_data = {
-            'body_token': body.entityToken,
-            'body_name': body.name,
-            'is_solid': body.isSolid,
-            'is_visible': body.isVisible,
-            'volume': volume,
-            'face_count': face_count,
-            'edge_count': edge_count,
-            'bounding_box': {
-                'min': {'x': min_point.x, 'y': min_point.y, 'z': min_point.z},
-                'max': {'x': max_point.x, 'y': max_point.y, 'z': max_point.z}
-            }
-        }
-        
-        return entity_data
-        
-    except:
+    # Find the body by token
+    body = find_entity_by_token(design, body_token)
+    if body is None:
         if ui:
-            ui.messageBox('Failed get_body_info_by_token:\n{}'.format(traceback.format_exc()))
+            ui.messageBox(f"Body with token not found")
         return None
-
-
+    
+    # Get bounding box
+    bbox = body.boundingBox
+    min_point = bbox.minPoint
+    max_point = bbox.maxPoint
+    
+    # Calculate volume (in cubic cm)
+    volume = 0
+    if body.isSolid:
+        volume = body.volume
+    
+    # Get face and edge counts
+    face_count = body.faces.count
+    edge_count = body.edges.count
+    
+    entity_data = {
+        'body_token': body.entityToken,
+        'body_name': body.name,
+        'is_solid': body.isSolid,
+        'is_visible': body.isVisible,
+        'volume': volume,
+        'face_count': face_count,
+        'edge_count': edge_count,
+        'bounding_box': {
+            'min': {'x': min_point.x, 'y': min_point.y, 'z': min_point.z},
+            'max': {'x': max_point.x, 'y': max_point.y, 'z': max_point.z}
+        }
+    }
+    
+    return entity_data
+    
 def get_feature_info_by_token(design, ui, feature_token):
     """
     Get detailed information about a feature by its entityToken.
@@ -948,44 +861,37 @@ def get_feature_info_by_token(design, ui, feature_token):
     Returns:
         dict: Feature information
     """
-    try:
-        # Find the feature by token
-        feature = find_entity_by_token(design, feature_token)
-        if feature is None:
-            if ui:
-                ui.messageBox(f"Feature with token not found")
-            return None
-        
-        entity_data = {
-            'feature_token': feature.entityToken,
-            'feature_name': feature.name,
-            'is_suppressed': feature.isSuppressed if hasattr(feature, 'isSuppressed') else False,
-            'bodies': []
-        }
-        
-        # Get associated bodies if available
-        if hasattr(feature, 'bodies'):
-            for i in range(feature.bodies.count):
-                body = feature.bodies.item(i)
-                entity_data['bodies'].append({
-                    'body_token': body.entityToken,
-                    'body_name': body.name
-                })
-        
-        # Get extent info for extrude features
-        if hasattr(feature, 'extentOne'):
-            extentDef = feature.extentOne
-            if hasattr(extentDef, 'distance'):
-                entity_data['distance'] = extentDef.distance.value
-        
-        return entity_data
-        
-    except:
+    # Find the feature by token
+    feature = find_entity_by_token(design, feature_token)
+    if feature is None:
         if ui:
-            ui.messageBox('Failed get_feature_info_by_token:\n{}'.format(traceback.format_exc()))
+            ui.messageBox(f"Feature with token not found")
         return None
-
-
+    
+    entity_data = {
+        'feature_token': feature.entityToken,
+        'feature_name': feature.name,
+        'is_suppressed': feature.isSuppressed if hasattr(feature, 'isSuppressed') else False,
+        'bodies': []
+    }
+    
+    # Get associated bodies if available
+    if hasattr(feature, 'bodies'):
+        for i in range(feature.bodies.count):
+            body = feature.bodies.item(i)
+            entity_data['bodies'].append({
+                'body_token': body.entityToken,
+                'body_name': body.name
+            })
+    
+    # Get extent info for extrude features
+    if hasattr(feature, 'extentOne'):
+        extentDef = feature.extentOne
+        if hasattr(extentDef, 'distance'):
+            entity_data['distance'] = extentDef.distance.value
+    
+    return entity_data
+    
 def set_body_visibility_by_token(design, ui, body_token, is_visible):
     """
     Set the visibility of a body by its entityToken.
@@ -999,55 +905,39 @@ def set_body_visibility_by_token(design, ui, body_token, is_visible):
     Returns:
         dict: Status information
     """
-    try:
-        # Find the body by token
-        body = find_entity_by_token(design, body_token)
-        if body is None:
-            if ui:
-                ui.messageBox(f"Body with token not found")
-            return None
-        
-        body.isVisible = is_visible
-        
-        return {
-            'body_token': body.entityToken,
-            'body_name': body.name,
-            'is_visible': body.isVisible
-        }
-        
-    except:
+    # Find the body by token
+    body = find_entity_by_token(design, body_token)
+    if body is None:
         if ui:
-            ui.messageBox('Failed set_body_visibility_by_token:\n{}'.format(traceback.format_exc()))
+            ui.messageBox(f"Body with token not found")
         return None
-
-
-##############################################################################################
-
+    
+    body.isVisible = is_visible
+    
+    return {
+        'body_token': body.entityToken,
+        'body_name': body.name,
+        'is_visible': body.isVisible
+    }
+    
 def offsetplane(design,ui,offset,plane ="XY"):
 
     """,
     Creates a new offset sketch which can be selected
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        offset = adsk.core.ValueInput.createByReal(offset)
-        ctorPlanes = rootComp.constructionPlanes
-        ctorPlaneInput1 = ctorPlanes.createInput()
-        
-        if plane == "XY":         
-            ctorPlaneInput1.setByOffset(rootComp.xYConstructionPlane, offset)
-        elif plane == "XZ":
-            ctorPlaneInput1.setByOffset(rootComp.xZConstructionPlane, offset)
-        elif plane == "YZ":
-            ctorPlaneInput1.setByOffset(rootComp.yZConstructionPlane, offset)
-        ctorPlanes.add(ctorPlaneInput1)
-    except:
-        if ui:
-            ui.messageBox('Failed offsetplane:\n{}'.format(traceback.format_exc()))
-
-
-
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    offset = adsk.core.ValueInput.createByReal(offset)
+    ctorPlanes = rootComp.constructionPlanes
+    ctorPlaneInput1 = ctorPlanes.createInput()
+    
+    if plane == "XY":         
+        ctorPlaneInput1.setByOffset(rootComp.xYConstructionPlane, offset)
+    elif plane == "XZ":
+        ctorPlaneInput1.setByOffset(rootComp.xZConstructionPlane, offset)
+    elif plane == "YZ":
+        ctorPlaneInput1.setByOffset(rootComp.yZConstructionPlane, offset)
+    ctorPlanes.add(ctorPlaneInput1)
 def create_thread(design, ui,inside,sizes):
     """
     
@@ -1056,65 +946,54 @@ def create_thread(design, ui,inside,sizes):
     lengt: length of the thread
     sizes : index of the size in the allsizes list
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        threadFeatures = rootComp.features.threadFeatures
-        
-        ui.messageBox('Select a face for threading.')               
-        face = ui.selectEntity("Select a face for threading", "Faces").entity
-        faces = adsk.core.ObjectCollection.create()
-        faces.add(face)
-        #Get the thread infos
-        
-        
-        threadDataQuery = threadFeatures.threadDataQuery
-        threadTypes = threadDataQuery.allThreadTypes
-        threadType = threadTypes[0]
-
-        allsizes = threadDataQuery.allSizes(threadType)
-        
-        # allsizes :
-        #'1/4', '5/16', '3/8', '7/16', '1/2', '5/8', '3/4', '7/8', '1', '1 1/8', '1 1/4',
-        # '1 3/8', '1 1/2', '1 3/4', '2', '2 1/4', '2 1/2', '2 3/4', '3', '3 1/2', '4', '4 1/2', '5')
-        #
-        threadSize = allsizes[sizes]
-
-
-        
-        allDesignations = threadDataQuery.allDesignations(threadType, threadSize)
-        threadDesignation = allDesignations[0]
-        
-        allClasses = threadDataQuery.allClasses(False, threadType, threadDesignation)
-        threadClass = allClasses[0]
-        
-        # create the threadInfo according to the query result
-        threadInfo = threadFeatures.createThreadInfo(inside, threadType, threadDesignation, threadClass)
-        
-        # get the face the thread will be applied to
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    threadFeatures = rootComp.features.threadFeatures
     
-        
+    ui.messageBox('Select a face for threading.')               
+    face = ui.selectEntity("Select a face for threading", "Faces").entity
+    faces = adsk.core.ObjectCollection.create()
+    faces.add(face)
+    #Get the thread infos
+    
+    
+    threadDataQuery = threadFeatures.threadDataQuery
+    threadTypes = threadDataQuery.allThreadTypes
+    threadType = threadTypes[0]
 
-        threadInput = threadFeatures.createInput(faces, threadInfo)
-        threadInput.isFullLength = True
-        
-        # create the final thread
-        thread = threadFeatures.add(threadInput)
-
-
-
-
-        
-    except: 
-        if ui:
-            ui.messageBox('Failed offsetplane thread:\n{}'.format(traceback.format_exc()))
-
-
-
-
-
+    allsizes = threadDataQuery.allSizes(threadType)
+    
+    # allsizes :
+    #'1/4', '5/16', '3/8', '7/16', '1/2', '5/8', '3/4', '7/8', '1', '1 1/8', '1 1/4',
+    # '1 3/8', '1 1/2', '1 3/4', '2', '2 1/4', '2 1/2', '2 3/4', '3', '3 1/2', '4', '4 1/2', '5')
+    #
+    threadSize = allsizes[sizes]
 
 
+    
+    allDesignations = threadDataQuery.allDesignations(threadType, threadSize)
+    threadDesignation = allDesignations[0]
+    
+    allClasses = threadDataQuery.allClasses(False, threadType, threadDesignation)
+    threadClass = allClasses[0]
+    
+    # create the threadInfo according to the query result
+    threadInfo = threadFeatures.createThreadInfo(inside, threadType, threadDesignation, threadClass)
+    
+    # get the face the thread will be applied to
+    
+    
+
+    threadInput = threadFeatures.createInput(faces, threadInfo)
+    threadInput.isFullLength = True
+    
+    # create the final thread
+    thread = threadFeatures.add(threadInput)
+
+
+
+
+    
 def _coerce_point(point):
     if isinstance(point, (list, tuple)):
         if len(point) == 2:
@@ -1135,64 +1014,49 @@ def spline(design, ui, points, plane="XY"):
     Draws a spline through the given points on the specified plane
     Plane can be "XY", "XZ", or "YZ"
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        if plane == "XY":
-            sketch = sketches.add(rootComp.xYConstructionPlane)
-        elif plane == "XZ":
-            sketch = sketches.add(rootComp.xZConstructionPlane)
-        elif plane == "YZ":
-            sketch = sketches.add(rootComp.yZConstructionPlane)
-        
-        splinePoints = adsk.core.ObjectCollection.create()
-        for point in points:
-            x, y, z = _coerce_point(point)
-            splinePoints.add(adsk.core.Point3D.create(x, y, z))
-        
-        sketch.sketchCurves.sketchFittedSplines.add(splinePoints)
-    except:
-        if ui:
-            ui.messageBox('Failed draw_spline:\n{}'.format(traceback.format_exc()))
-
-
-
-
-
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    if plane == "XY":
+        sketch = sketches.add(rootComp.xYConstructionPlane)
+    elif plane == "XZ":
+        sketch = sketches.add(rootComp.xZConstructionPlane)
+    elif plane == "YZ":
+        sketch = sketches.add(rootComp.yZConstructionPlane)
+    
+    splinePoints = adsk.core.ObjectCollection.create()
+    for point in points:
+        x, y, z = _coerce_point(point)
+        splinePoints.add(adsk.core.Point3D.create(x, y, z))
+    
+    sketch.sketchCurves.sketchFittedSplines.add(splinePoints)
 def arc(design,ui,point1,point2,points3,plane = "XY",connect = False):
     """
     This creates arc between two points on the specified plane
     """
-    try:
-        rootComp = design.rootComponent #Holen der Rotkomponente
-        sketches = rootComp.sketches
+    rootComp = design.rootComponent #Holen der Rotkomponente
+    sketches = rootComp.sketches
+    xyPlane = rootComp.xYConstructionPlane 
+    if plane == "XZ":
+        sketch = sketches.add(rootComp.xZConstructionPlane)
+    elif plane == "YZ":
+        sketch = sketches.add(rootComp.yZConstructionPlane)
+    else:
         xyPlane = rootComp.xYConstructionPlane 
-        if plane == "XZ":
-            sketch = sketches.add(rootComp.xZConstructionPlane)
-        elif plane == "YZ":
-            sketch = sketches.add(rootComp.yZConstructionPlane)
-        else:
-            xyPlane = rootComp.xYConstructionPlane 
 
-            sketch = sketches.add(xyPlane)
-        start  = adsk.core.Point3D.create(point1[0],point1[1],point1[2])
-        alongpoint    = adsk.core.Point3D.create(point2[0],point2[1],point2[2])
-        endpoint =adsk.core.Point3D.create(points3[0],points3[1],points3[2])
-        arcs = sketch.sketchCurves.sketchArcs
-        arc = arcs.addByThreePoints(start, alongpoint, endpoint)
-        if connect:
-            startconnect = adsk.core.Point3D.create(start.x, start.y, start.z)
-            endconnect = adsk.core.Point3D.create(endpoint.x, endpoint.y, endpoint.z)
-            lines = sketch.sketchCurves.sketchLines
-            lines.addByTwoPoints(startconnect, endconnect)
-            connect = False
-        else:
-            lines = sketch.sketchCurves.sketchLines
-
-    except:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-
+        sketch = sketches.add(xyPlane)
+    start  = adsk.core.Point3D.create(point1[0],point1[1],point1[2])
+    alongpoint    = adsk.core.Point3D.create(point2[0],point2[1],point2[2])
+    endpoint =adsk.core.Point3D.create(points3[0],points3[1],points3[2])
+    arcs = sketch.sketchCurves.sketchArcs
+    arc = arcs.addByThreePoints(start, alongpoint, endpoint)
+    if connect:
+        startconnect = adsk.core.Point3D.create(start.x, start.y, start.z)
+        endconnect = adsk.core.Point3D.create(endpoint.x, endpoint.y, endpoint.z)
+        lines = sketch.sketchCurves.sketchLines
+        lines.addByTwoPoints(startconnect, endconnect)
+        connect = False
+    else:
+        lines = sketch.sketchCurves.sketchLines
 
 def draw_lines(design,ui, points,Plane = "XY"):
     """
@@ -1201,30 +1065,25 @@ def draw_lines(design,ui, points,Plane = "XY"):
     Draws lines between the given points on the specified plane
     Connects the last point to the first point to close the shape
     """
-    try:
-        rootComp = design.rootComponent #Holen der Rotkomponente
-        sketches = rootComp.sketches
-        if Plane == "XY":
-            xyPlane = rootComp.xYConstructionPlane 
-            sketch = sketches.add(xyPlane)
-        elif Plane == "XZ":
-            xZPlane = rootComp.xZConstructionPlane
-            sketch = sketches.add(xZPlane)
-        elif Plane == "YZ":
-            yZPlane = rootComp.yZConstructionPlane
-            sketch = sketches.add(yZPlane)
-        for i in range(len(points)-1):
-            start = adsk.core.Point3D.create(points[i][0], points[i][1], 0)
-            end   = adsk.core.Point3D.create(points[i+1][0], points[i+1][1], 0)
-            sketch.sketchCurves.sketchLines.addByTwoPoints(start, end)
-        sketch.sketchCurves.sketchLines.addByTwoPoints(
-            adsk.core.Point3D.create(points[-1][0],points[-1][1],0),
-            adsk.core.Point3D.create(points[0][0],points[0][1],0) #
-        ) # Connects the first and last point
-
-    except:
-        if ui :
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
+    rootComp = design.rootComponent #Holen der Rotkomponente
+    sketches = rootComp.sketches
+    if Plane == "XY":
+        xyPlane = rootComp.xYConstructionPlane 
+        sketch = sketches.add(xyPlane)
+    elif Plane == "XZ":
+        xZPlane = rootComp.xZConstructionPlane
+        sketch = sketches.add(xZPlane)
+    elif Plane == "YZ":
+        yZPlane = rootComp.yZConstructionPlane
+        sketch = sketches.add(yZPlane)
+    for i in range(len(points)-1):
+        start = adsk.core.Point3D.create(points[i][0], points[i][1], 0)
+        end   = adsk.core.Point3D.create(points[i+1][0], points[i+1][1], 0)
+        sketch.sketchCurves.sketchLines.addByTwoPoints(start, end)
+    sketch.sketchCurves.sketchLines.addByTwoPoints(
+        adsk.core.Point3D.create(points[-1][0],points[-1][1],0),
+        adsk.core.Point3D.create(points[0][0],points[0][1],0) #
+    ) # Connects the first and last point
 
 def draw_one_line(design, ui, x1, y1, z1, x2, y2, z2, plane="XY"):
     """
@@ -1234,25 +1093,13 @@ def draw_one_line(design, ui, x1, y1, z1, x2, y2, z2, plane="XY"):
     This is how we can make half circles and extrude them
 
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        sketch = sketches.item(sketches.count - 1)
-        
-        start = adsk.core.Point3D.create(x1, y1, 0)
-        end = adsk.core.Point3D.create(x2, y2, 0)
-        sketch.sketchCurves.sketchLines.addByTwoPoints(start, end)
-    except:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-
-
-
-#################################################################################
-
-
-
-###3D Geometry Functions######
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    sketch = sketches.item(sketches.count - 1)
+    
+    start = adsk.core.Point3D.create(x1, y1, 0)
+    end = adsk.core.Point3D.create(x2, y2, 0)
+    sketch.sketchCurves.sketchLines.addByTwoPoints(start, end)
 def loft(design, ui, sketchcount):
     """
     Creates a loft between the last 'sketchcount' sketches
@@ -1260,95 +1107,77 @@ def loft(design, ui, sketchcount):
     Returns:
         dict: Entity data with feature and body information, or None on failure
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        loftFeatures = rootComp.features.loftFeatures
-        
-        loftInput = loftFeatures.createInput(adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        loftSectionsObj = loftInput.loftSections
-        
-        # Add profiles from the last 'sketchcount' sketches
-        for i in range(sketchcount):
-            sketch = sketches.item(sketches.count - 1 - i)
-            profile = sketch.profiles.item(0)
-            loftSectionsObj.add(profile)
-        
-        loftInput.isSolid = True
-        loftInput.isClosed = False
-        loftInput.isTangentEdgesMerged = True
-        
-        # Create loft feature
-        loftFeature = loftFeatures.add(loftInput)
-        
-        # Collect entity data for the created feature and bodies
-        entity_data = {
-            'feature_token': loftFeature.entityToken,
-            'feature_name': loftFeature.name,
-            'feature_type': 'Loft',
-            'bodies': []
-        }
-        for i in range(loftFeature.bodies.count):
-            body = loftFeature.bodies.item(i)
-            entity_data['bodies'].append({
-                'body_token': body.entityToken,
-                'body_name': body.name,
-                'body_index': rootComp.bRepBodies.count - loftFeature.bodies.count + i
-            })
-        
-        return entity_data
-        
-    except:
-        if ui:
-            ui.messageBox('Failed loft:\n{}'.format(traceback.format_exc()))
-        return None
-
-
-
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    loftFeatures = rootComp.features.loftFeatures
+    
+    loftInput = loftFeatures.createInput(adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+    loftSectionsObj = loftInput.loftSections
+    
+    # Add profiles from the last 'sketchcount' sketches
+    for i in range(sketchcount):
+        sketch = sketches.item(sketches.count - 1 - i)
+        profile = sketch.profiles.item(0)
+        loftSectionsObj.add(profile)
+    
+    loftInput.isSolid = True
+    loftInput.isClosed = False
+    loftInput.isTangentEdgesMerged = True
+    
+    # Create loft feature
+    loftFeature = loftFeatures.add(loftInput)
+    
+    # Collect entity data for the created feature and bodies
+    entity_data = {
+        'feature_token': loftFeature.entityToken,
+        'feature_name': loftFeature.name,
+        'feature_type': 'Loft',
+        'bodies': []
+    }
+    for i in range(loftFeature.bodies.count):
+        body = loftFeature.bodies.item(i)
+        entity_data['bodies'].append({
+            'body_token': body.entityToken,
+            'body_name': body.name,
+            'body_index': rootComp.bRepBodies.count - loftFeature.bodies.count + i
+        })
+    
+    return entity_data
+    
 def boolean_operation(design,ui,op):
     """
     This function performs boolean operations (cut, intersect, join)
     It is important to draw the target body first, then the tool body
     
     """
-    try:
-        app = adsk.core.Application.get()
-        product = app.activeProduct
-        design = adsk.fusion.Design.cast(product)
-        ui  = app.userInterface
+    app = adsk.core.Application.get()
+    product = app.activeProduct
+    design = adsk.fusion.Design.cast(product)
+    ui  = app.userInterface
 
-        # Get the root component of the active design.
-        rootComp = design.rootComponent
-        features = rootComp.features
-        bodies = rootComp.bRepBodies
+    # Get the root component of the active design.
+    rootComp = design.rootComponent
+    features = rootComp.features
+    bodies = rootComp.bRepBodies
        
-        targetBody = bodies.item(0) # target body has to be the first drawn body
-        toolBody = bodies.item(1)   # tool body has to be the second drawn body
+    targetBody = bodies.item(0) # target body has to be the first drawn body
+    toolBody = bodies.item(1)   # tool body has to be the second drawn body
 
+    
+    combineFeatures = rootComp.features.combineFeatures
+    tools = adsk.core.ObjectCollection.create()
+    tools.add(toolBody)
+    input: adsk.fusion.CombineFeatureInput = combineFeatures.createInput(targetBody, tools)
+    input.isNewComponent = False
+    input.isKeepToolBodies = False
+    if op == "cut":
+        input.operation = adsk.fusion.FeatureOperations.CutFeatureOperation
+    elif op == "intersect":
+        input.operation = adsk.fusion.FeatureOperations.IntersectFeatureOperation
+    elif op == "join":
+        input.operation = adsk.fusion.FeatureOperations.JoinFeatureOperation
         
-        combineFeatures = rootComp.features.combineFeatures
-        tools = adsk.core.ObjectCollection.create()
-        tools.add(toolBody)
-        input: adsk.fusion.CombineFeatureInput = combineFeatures.createInput(targetBody, tools)
-        input.isNewComponent = False
-        input.isKeepToolBodies = False
-        if op == "cut":
-            input.operation = adsk.fusion.FeatureOperations.CutFeatureOperation
-        elif op == "intersect":
-            input.operation = adsk.fusion.FeatureOperations.IntersectFeatureOperation
-        elif op == "join":
-            input.operation = adsk.fusion.FeatureOperations.JoinFeatureOperation
-            
-        combineFeature = combineFeatures.add(input)
-    except:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-
-
-
-
-
-
+    combineFeature = combineFeatures.add(input)
 def sweep(design,ui):
     """
     Creates a sweep feature using the last two sketches.
@@ -1356,74 +1185,67 @@ def sweep(design,ui):
     Returns:
         dict: Entity data with feature and body information, or None on failure
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        sweeps = rootComp.features.sweepFeatures
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    sweeps = rootComp.features.sweepFeatures
 
-        profsketch = None
-        for i in range(sketches.count - 1, -1, -1):
-            sketch = sketches.item(i)
-            if sketch.profiles.count > 0:
-                profsketch = sketch
-                break
-        if profsketch is None:
-            if ui:
-                ui.messageBox('Failed sweep:\nNo sketch with a profile found')
-            return None
-        prof = profsketch.profiles.item(0)
-
-        pathsketch = None
-        for i in range(sketches.count - 1, -1, -1):
-            sketch = sketches.item(i)
-            if sketch == profsketch:
-                continue
-            if sketch.sketchCurves.count > 0:
-                pathsketch = sketch
-                break
-        if pathsketch is None:
-            if profsketch.sketchCurves.count > 0:
-                pathsketch = profsketch
-            else:
-                if ui:
-                    ui.messageBox('Failed sweep:\nNo sketch with a path found')
-                return None
-        # collect all sketch curves in an ObjectCollection
-        pathCurves = adsk.core.ObjectCollection.create()
-        for i in range(pathsketch.sketchCurves.count):
-            pathCurves.add(pathsketch.sketchCurves.item(i))
-        if pathCurves.count == 0:
-            if ui:
-                ui.messageBox('Failed sweep:\nPath sketch has no curves')
-            return None
-
-    
-        path = adsk.fusion.Path.create(pathCurves, 0) # connec
-        sweepInput = sweeps.createInput(prof, path, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        sweepFeature = sweeps.add(sweepInput)
-        
-        # Collect entity data for the created feature and bodies
-        entity_data = {
-            'feature_token': sweepFeature.entityToken,
-            'feature_name': sweepFeature.name,
-            'feature_type': 'Sweep',
-            'bodies': []
-        }
-        for i in range(sweepFeature.bodies.count):
-            body = sweepFeature.bodies.item(i)
-            entity_data['bodies'].append({
-                'body_token': body.entityToken,
-                'body_name': body.name,
-                'body_index': rootComp.bRepBodies.count - sweepFeature.bodies.count + i
-            })
-        
-        return entity_data
-    except:
+    profsketch = None
+    for i in range(sketches.count - 1, -1, -1):
+        sketch = sketches.item(i)
+        if sketch.profiles.count > 0:
+            profsketch = sketch
+            break
+    if profsketch is None:
         if ui:
-            ui.messageBox('Failed sweep:\n{}'.format(traceback.format_exc()))
+            ui.messageBox('Failed sweep:\nNo sketch with a profile found')
+        return None
+    prof = profsketch.profiles.item(0)
+
+    pathsketch = None
+    for i in range(sketches.count - 1, -1, -1):
+        sketch = sketches.item(i)
+        if sketch == profsketch:
+            continue
+        if sketch.sketchCurves.count > 0:
+            pathsketch = sketch
+            break
+    if pathsketch is None:
+        if profsketch.sketchCurves.count > 0:
+            pathsketch = profsketch
+        else:
+            if ui:
+                ui.messageBox('Failed sweep:\nNo sketch with a path found')
+            return None
+    # collect all sketch curves in an ObjectCollection
+    pathCurves = adsk.core.ObjectCollection.create()
+    for i in range(pathsketch.sketchCurves.count):
+        pathCurves.add(pathsketch.sketchCurves.item(i))
+    if pathCurves.count == 0:
+        if ui:
+            ui.messageBox('Failed sweep:\nPath sketch has no curves')
         return None
 
-
+    
+    path = adsk.fusion.Path.create(pathCurves, 0) # connec
+    sweepInput = sweeps.createInput(prof, path, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+    sweepFeature = sweeps.add(sweepInput)
+    
+    # Collect entity data for the created feature and bodies
+    entity_data = {
+        'feature_token': sweepFeature.entityToken,
+        'feature_name': sweepFeature.name,
+        'feature_type': 'Sweep',
+        'bodies': []
+    }
+    for i in range(sweepFeature.bodies.count):
+        body = sweepFeature.bodies.item(i)
+        entity_data['bodies'].append({
+            'body_token': body.entityToken,
+            'body_name': body.name,
+            'body_index': rootComp.bRepBodies.count - sweepFeature.bodies.count + i
+        })
+    
+    return entity_data
 def extrude_last_sketch(design, ui, value,taperangle):
     """
     Just extrudes the last sketch by the given value
@@ -1431,125 +1253,101 @@ def extrude_last_sketch(design, ui, value,taperangle):
     Returns:
         dict: Entity data with feature and body information, or None on failure
     """
-    try:
-        rootComp = design.rootComponent 
-        sketches = rootComp.sketches
-        sketch = sketches.item(sketches.count - 1)  # Letzter Sketch
-        prof = sketch.profiles.item(0)  # Erstes Profil im Sketch
-        extrudes = rootComp.features.extrudeFeatures
-        extrudeInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        distance = adsk.core.ValueInput.createByReal(value)
-        
-        if taperangle != 0:
-            taperValue = adsk.core.ValueInput.createByString(f'{taperangle} deg')
+    rootComp = design.rootComponent 
+    sketches = rootComp.sketches
+    sketch = sketches.item(sketches.count - 1)  # Letzter Sketch
+    prof = sketch.profiles.item(0)  # Erstes Profil im Sketch
+    extrudes = rootComp.features.extrudeFeatures
+    extrudeInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+    distance = adsk.core.ValueInput.createByReal(value)
+    
+    if taperangle != 0:
+        taperValue = adsk.core.ValueInput.createByString(f'{taperangle} deg')
      
-            extent_distance = adsk.fusion.DistanceExtentDefinition.create(distance)
-            extrudeInput.setOneSideExtent(extent_distance, adsk.fusion.ExtentDirections.PositiveExtentDirection, taperValue)
-        else:
-            extrudeInput.setDistanceExtent(False, distance)
-        
-        extrudeFeature = extrudes.add(extrudeInput)
-        
-        # Collect entity data for the created feature and bodies
-        entity_data = {
-            'feature_token': extrudeFeature.entityToken,
-            'feature_name': extrudeFeature.name,
-            'feature_type': 'Extrude',
-            'bodies': []
-        }
-        for i in range(extrudeFeature.bodies.count):
-            body = extrudeFeature.bodies.item(i)
-            entity_data['bodies'].append({
-                'body_token': body.entityToken,
-                'body_name': body.name,
-                'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
-            })
-        
-        return entity_data
-    except:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-        return None
-
+        extent_distance = adsk.fusion.DistanceExtentDefinition.create(distance)
+        extrudeInput.setOneSideExtent(extent_distance, adsk.fusion.ExtentDirections.PositiveExtentDirection, taperValue)
+    else:
+        extrudeInput.setDistanceExtent(False, distance)
+    
+    extrudeFeature = extrudes.add(extrudeInput)
+    
+    # Collect entity data for the created feature and bodies
+    entity_data = {
+        'feature_token': extrudeFeature.entityToken,
+        'feature_name': extrudeFeature.name,
+        'feature_type': 'Extrude',
+        'bodies': []
+    }
+    for i in range(extrudeFeature.bodies.count):
+        body = extrudeFeature.bodies.item(i)
+        entity_data['bodies'].append({
+            'body_token': body.entityToken,
+            'body_name': body.name,
+            'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
+        })
+    
+    return entity_data
 def shell_existing_body(design, ui, thickness=0.5, faceindex=0):
     """
     Shells the body on a specified face index with given thickness
     """
-    try:
-        rootComp = design.rootComponent
-        features = rootComp.features
-        body = rootComp.bRepBodies.item(0)
+    rootComp = design.rootComponent
+    features = rootComp.features
+    body = rootComp.bRepBodies.item(0)
 
-        entities = adsk.core.ObjectCollection.create()
-        entities.add(body.faces.item(faceindex))
+    entities = adsk.core.ObjectCollection.create()
+    entities.add(body.faces.item(faceindex))
 
-        shellFeats = features.shellFeatures
-        isTangentChain = False
-        shellInput = shellFeats.createInput(entities, isTangentChain)
+    shellFeats = features.shellFeatures
+    isTangentChain = False
+    shellInput = shellFeats.createInput(entities, isTangentChain)
 
-        thicknessVal = adsk.core.ValueInput.createByReal(thickness)
-        shellInput.insideThickness = thicknessVal
+    thicknessVal = adsk.core.ValueInput.createByReal(thickness)
+    shellInput.insideThickness = thicknessVal
 
-        shellInput.shellType = adsk.fusion.ShellTypes.SharpOffsetShellType
+    shellInput.shellType = adsk.fusion.ShellTypes.SharpOffsetShellType
 
-        # Ausführen
-        shellFeats.add(shellInput)
-
-    except:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-
+    # Ausführen
+    shellFeats.add(shellInput)
 
 def fillet_edges(design, ui, radius=0.3):
-    try:
-        rootComp = design.rootComponent
+    rootComp = design.rootComponent
 
-        bodies = rootComp.bRepBodies
+    bodies = rootComp.bRepBodies
 
-        edgeCollection = adsk.core.ObjectCollection.create()
-        for body_idx in range(bodies.count):
-            body = bodies.item(body_idx)
-            for edge_idx in range(body.edges.count):
-                edge = body.edges.item(edge_idx)
-                edgeCollection.add(edge)
+    edgeCollection = adsk.core.ObjectCollection.create()
+    for body_idx in range(bodies.count):
+        body = bodies.item(body_idx)
+        for edge_idx in range(body.edges.count):
+            edge = body.edges.item(edge_idx)
+            edgeCollection.add(edge)
 
-        fillets = rootComp.features.filletFeatures
-        radiusInput = adsk.core.ValueInput.createByReal(radius)
-        filletInput = fillets.createInput()
-        filletInput.isRollingBallCorner = True
-        edgeSetInput = filletInput.edgeSetInputs.addConstantRadiusEdgeSet(edgeCollection, radiusInput, True)
-        edgeSetInput.continuity = adsk.fusion.SurfaceContinuityTypes.TangentSurfaceContinuityType
-        fillets.add(filletInput)
+    fillets = rootComp.features.filletFeatures
+    radiusInput = adsk.core.ValueInput.createByReal(radius)
+    filletInput = fillets.createInput()
+    filletInput.isRollingBallCorner = True
+    edgeSetInput = filletInput.edgeSetInputs.addConstantRadiusEdgeSet(edgeCollection, radiusInput, True)
+    edgeSetInput.continuity = adsk.fusion.SurfaceContinuityTypes.TangentSurfaceContinuityType
+    fillets.add(filletInput)
 
-    except:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
 def revolve_profile(design, ui,  angle=360):
     """
     This function revolves already existing sketch with drawn lines from the function draw_lines
     around the given axisLine by the specified angle (default is 360 degrees).
     """
-    try:
-        rootComp = design.rootComponent
-        ui.messageBox('Select a profile to revolve.')
-        profile = ui.selectEntity('Select a profile to revolve.', 'Profiles').entity
-        ui.messageBox('Select sketch line for axis.')
-        axis = ui.selectEntity('Select sketch line for axis.', 'SketchLines').entity
-        operation = adsk.fusion.FeatureOperations.NewComponentFeatureOperation
-        revolveFeatures = rootComp.features.revolveFeatures
-        input = revolveFeatures.createInput(profile, axis, operation)
-        input.setAngleExtent(False, adsk.core.ValueInput.createByString(str(angle) + ' deg'))
-        revolveFeature = revolveFeatures.add(input)
+    rootComp = design.rootComponent
+    ui.messageBox('Select a profile to revolve.')
+    profile = ui.selectEntity('Select a profile to revolve.', 'Profiles').entity
+    ui.messageBox('Select sketch line for axis.')
+    axis = ui.selectEntity('Select sketch line for axis.', 'SketchLines').entity
+    operation = adsk.fusion.FeatureOperations.NewComponentFeatureOperation
+    revolveFeatures = rootComp.features.revolveFeatures
+    input = revolveFeatures.createInput(profile, axis, operation)
+    input.setAngleExtent(False, adsk.core.ValueInput.createByString(str(angle) + ' deg'))
+    revolveFeature = revolveFeatures.add(input)
 
 
 
-    except:
-        if ui:
-            ui.messageBox('Failed revolve_profile:\n{}'.format(traceback.format_exc()))
-
-##############################################################################################
-
-###Selection Functions######
 def rect_pattern(design,ui,axis_one ,axis_two ,quantity_one,quantity_two,distance_one,distance_two,plane="XY"):
     """
     Creates a rectangular pattern of the last body along the specified axis and plane
@@ -1563,176 +1361,122 @@ def rect_pattern(design,ui,axis_one ,axis_two ,quantity_one,quantity_two,distanc
     distance_two: Spacing between instances in the second direction
     plane: Construction plane for the pattern ("XY", "XZ", or "YZ")
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        rectFeats = rootComp.features.rectangularPatternFeatures
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    rectFeats = rootComp.features.rectangularPatternFeatures
 
 
 
-        quantity_one = adsk.core.ValueInput.createByString(f"{quantity_one}")
-        quantity_two = adsk.core.ValueInput.createByString(f"{quantity_two}")
-        distance_one = adsk.core.ValueInput.createByString(f"{distance_one}")
-        distance_two = adsk.core.ValueInput.createByString(f"{distance_two}")
+    quantity_one = adsk.core.ValueInput.createByString(f"{quantity_one}")
+    quantity_two = adsk.core.ValueInput.createByString(f"{quantity_two}")
+    distance_one = adsk.core.ValueInput.createByString(f"{distance_one}")
+    distance_two = adsk.core.ValueInput.createByString(f"{distance_two}")
 
-        bodies = rootComp.bRepBodies
-        if bodies.count > 0:
-            latest_body = bodies.item(bodies.count - 1)
-        else:
-            ui.messageBox("No bodies found.")
-        inputEntites = adsk.core.ObjectCollection.create()
-        inputEntites.add(latest_body)
-        baseaxis_one = None    
-        if axis_one == "Y":
-            baseaxis_one = rootComp.yConstructionAxis 
-        elif axis_one == "X":
-            baseaxis_one = rootComp.xConstructionAxis
-        elif axis_one == "Z":
-            baseaxis_one = rootComp.zConstructionAxis
+    bodies = rootComp.bRepBodies
+    if bodies.count > 0:
+        latest_body = bodies.item(bodies.count - 1)
+    else:
+        ui.messageBox("No bodies found.")
+    inputEntites = adsk.core.ObjectCollection.create()
+    inputEntites.add(latest_body)
+    baseaxis_one = None    
+    if axis_one == "Y":
+        baseaxis_one = rootComp.yConstructionAxis 
+    elif axis_one == "X":
+        baseaxis_one = rootComp.xConstructionAxis
+    elif axis_one == "Z":
+        baseaxis_one = rootComp.zConstructionAxis
 
 
-        baseaxis_two = None    
-        if axis_two == "Y":
-            baseaxis_two = rootComp.yConstructionAxis  
-        elif axis_two == "X":
-            baseaxis_two = rootComp.xConstructionAxis
-        elif axis_two == "Z":
-            baseaxis_two = rootComp.zConstructionAxis
+    baseaxis_two = None    
+    if axis_two == "Y":
+        baseaxis_two = rootComp.yConstructionAxis  
+    elif axis_two == "X":
+        baseaxis_two = rootComp.xConstructionAxis
+    elif axis_two == "Z":
+        baseaxis_two = rootComp.zConstructionAxis
 
  
 
-        rectangularPatternInput = rectFeats.createInput(inputEntites,baseaxis_one, quantity_one, distance_one, adsk.fusion.PatternDistanceType.SpacingPatternDistanceType)
-        #second direction
-        rectangularPatternInput.setDirectionTwo(baseaxis_two,quantity_two, distance_two)
-        rectangularFeature = rectFeats.add(rectangularPatternInput)
-    except:
-        if ui:
-            ui.messageBox('Failed to execute rectangular pattern:\n{}'.format(traceback.format_exc()))
-        
-        
-
+    rectangularPatternInput = rectFeats.createInput(inputEntites,baseaxis_one, quantity_one, distance_one, adsk.fusion.PatternDistanceType.SpacingPatternDistanceType)
+    #second direction
+    rectangularPatternInput.setDirectionTwo(baseaxis_two,quantity_two, distance_two)
+    rectangularFeature = rectFeats.add(rectangularPatternInput)
 def circular_pattern(design, ui, quantity, axis, plane):
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        circularFeats = rootComp.features.circularPatternFeatures
-        bodies = rootComp.bRepBodies
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    circularFeats = rootComp.features.circularPatternFeatures
+    bodies = rootComp.bRepBodies
 
-        if bodies.count > 0:
-            latest_body = bodies.item(bodies.count - 1)
-        else:
-            ui.messageBox("No bodies found.")
-        inputEntites = adsk.core.ObjectCollection.create()
-        inputEntites.add(latest_body)
-        if plane == "XY":
-            sketch = sketches.add(rootComp.xYConstructionPlane)
-        elif plane == "XZ":
-            sketch = sketches.add(rootComp.xZConstructionPlane)    
-        elif plane == "YZ":
-            sketch = sketches.add(rootComp.yZConstructionPlane)
-        
-        if axis == "Y":
-            yAxis = rootComp.yConstructionAxis
-            circularFeatInput = circularFeats.createInput(inputEntites, yAxis)
-        elif axis == "X":
-            xAxis = rootComp.xConstructionAxis
-            circularFeatInput = circularFeats.createInput(inputEntites, xAxis)
-        elif axis == "Z":
-            zAxis = rootComp.zConstructionAxis
-            circularFeatInput = circularFeats.createInput(inputEntites, zAxis)
+    if bodies.count > 0:
+        latest_body = bodies.item(bodies.count - 1)
+    else:
+        ui.messageBox("No bodies found.")
+    inputEntites = adsk.core.ObjectCollection.create()
+    inputEntites.add(latest_body)
+    if plane == "XY":
+        sketch = sketches.add(rootComp.xYConstructionPlane)
+    elif plane == "XZ":
+        sketch = sketches.add(rootComp.xZConstructionPlane)    
+    elif plane == "YZ":
+        sketch = sketches.add(rootComp.yZConstructionPlane)
+    
+    if axis == "Y":
+        yAxis = rootComp.yConstructionAxis
+        circularFeatInput = circularFeats.createInput(inputEntites, yAxis)
+    elif axis == "X":
+        xAxis = rootComp.xConstructionAxis
+        circularFeatInput = circularFeats.createInput(inputEntites, xAxis)
+    elif axis == "Z":
+        zAxis = rootComp.zConstructionAxis
+        circularFeatInput = circularFeats.createInput(inputEntites, zAxis)
 
-        circularFeatInput.quantity = adsk.core.ValueInput.createByReal((quantity))
-        circularFeatInput.totalAngle = adsk.core.ValueInput.createByString('360 deg')
-        circularFeatInput.isSymmetric = False
-        circularFeats.add(circularFeatInput)
-        
-        
-
-    except:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-
-
-
+    circularFeatInput.quantity = adsk.core.ValueInput.createByReal((quantity))
+    circularFeatInput.totalAngle = adsk.core.ValueInput.createByString('360 deg')
+    circularFeatInput.isSymmetric = False
+    circularFeats.add(circularFeatInput)
+    
+    
 
 def undo(design, ui):
-    try:
-        app = adsk.core.Application.get()
-        ui  = app.userInterface
-        
-        cmd = ui.commandDefinitions.itemById('UndoCommand')
-        cmd.execute()
-
-    except:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-
+    app = adsk.core.Application.get()
+    ui  = app.userInterface
+    
+    cmd = ui.commandDefinitions.itemById('UndoCommand')
+    cmd.execute()
 
 def delete(design, ui):
     """
     Remove every body and sketch from the design and clear timeline history.
     """
-    try:
-        rootComp = design.rootComponent
+    rootComp = design.rootComponent
 
-        timeline = getattr(design, "timeline", None)
-        if timeline:
-            for i in range(timeline.count - 1, -1, -1):
-                item = timeline.item(i)
-                if item:
-                    try:
-                        entity = item.entity
-                        if entity and entity.isValid:
-                            entity.deleteMe()
-                    except:
-                        # Some timeline items are not deletable or lack an entity.
-                        pass
-
-        bodies = rootComp.bRepBodies
-        removeFeat = rootComp.features.removeFeatures
-        for i in range(bodies.count - 1, -1, -1):
-            body = bodies.item(i)
-            if body:
-                try:
-                    removeFeat.add(body)
-                except:
-                    body.deleteMe()
-
-        sketches = rootComp.sketches
-        for i in range(sketches.count - 1, -1, -1):
-            sketch = sketches.item(i)
-            if sketch:
-                sketch.deleteMe()
-
-    except:
-        if ui:
-            ui.messageBox('Failed to delete:\n{}'.format(traceback.format_exc()))
-
-
-
+    timeline = getattr(design, "timeline", None)
+    if timeline:
+        for i in range(timeline.count - 1, -1, -1):
+            item = timeline.item(i)
+            if item:
+                entity = item.entity
+                if entity and entity.isValid:
+                    entity.deleteMe()
 def export_as_STEP(design, ui,Name):
-    try:
-        
-        exportMgr = design.exportManager
-              
-        directory_name = "Fusion_Exports"
-        FilePath = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop') 
-        Export_dir_path = os.path.join(FilePath, directory_name, Name)
-        os.makedirs(Export_dir_path, exist_ok=True) 
-        
-        stepOptions = exportMgr.createSTEPExportOptions(Export_dir_path+ f'/{Name}.step')  # Save as Fusion.step in the export directory
+    
+    exportMgr = design.exportManager
+          
+    directory_name = "Fusion_Exports"
+    FilePath = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop') 
+    Export_dir_path = os.path.join(FilePath, directory_name, Name)
+    os.makedirs(Export_dir_path, exist_ok=True) 
+    
+    stepOptions = exportMgr.createSTEPExportOptions(Export_dir_path+ f'/{Name}.step')  # Save as Fusion.step in the export directory
        # stepOptions = exportMgr.createSTEPExportOptions(Export_dir_path)       
-        
-        
-        res = exportMgr.execute(stepOptions)
-        if res:
-            ui.messageBox(f"Exported STEP to: {Export_dir_path}")
-        else:
-            ui.messageBox("STEP export failed")
-    except:
-        if ui:
-            ui.messageBox('Failed export_as_STEP:\n{}'.format(traceback.format_exc()))
-
+    
+    
+    res = exportMgr.execute(stepOptions)
+    if res:
+        ui.messageBox(f"Exported STEP to: {Export_dir_path}")
+    else:
+        ui.messageBox("STEP export failed")
 def capture_screenshot(design, ui, name, width, height, directory=None):
     """
     Capture a screenshot of the active viewport.
@@ -1740,52 +1484,40 @@ def capture_screenshot(design, ui, name, width, height, directory=None):
     Returns:
         dict: Entity data with image path and dimensions, or None on failure
     """
-    try:
-        app = adsk.core.Application.get()
-        viewport = app.activeViewport
-        if not viewport:
-            raise RuntimeError("No active viewport available")
+    app = adsk.core.Application.get()
+    viewport = app.activeViewport
+    if not viewport:
+        raise RuntimeError("No active viewport available")
 
-        file_name = name if name.lower().endswith('.png') else f"{name}.png"
-        if directory:
-            base_dir = directory
-        else:
-            directory_name = "Fusion_Screenshots"
-            desktop_path = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
-            base_dir = os.path.join(desktop_path, directory_name)
+    file_name = name if name.lower().endswith('.png') else f"{name}.png"
+    if directory:
+        base_dir = directory
+    else:
+        directory_name = "Fusion_Screenshots"
+        desktop_path = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
+        base_dir = os.path.join(desktop_path, directory_name)
 
-        os.makedirs(base_dir, exist_ok=True)
-        file_path = os.path.join(base_dir, file_name)
+    os.makedirs(base_dir, exist_ok=True)
+    file_path = os.path.join(base_dir, file_name)
 
-        if not viewport.saveAsImageFile(file_path, int(width), int(height)):
-            raise RuntimeError("Viewport saveAsImageFile returned False")
+    if not viewport.saveAsImageFile(file_path, int(width), int(height)):
+        raise RuntimeError("Viewport saveAsImageFile returned False")
 
-        return {
-            'image_path': file_path,
-            'width': int(width),
-            'height': int(height)
-        }
-    except:
-        if ui:
-            ui.messageBox('Failed capture_screenshot:\n{}'.format(traceback.format_exc()))
-        return None
-
+    return {
+        'image_path': file_path,
+        'width': int(width),
+        'height': int(height)
+    }
 def cut_extrude(design,ui,depth):
-    try:
-        rootComp = design.rootComponent 
-        sketches = rootComp.sketches
-        sketch = sketches.item(sketches.count - 1)  # Letzter Sketch
-        prof = sketch.profiles.item(0)  # Erstes Profil im Sketch
-        extrudes = rootComp.features.extrudeFeatures
-        extrudeInput = extrudes.createInput(prof,adsk.fusion.FeatureOperations.CutFeatureOperation)
-        distance = adsk.core.ValueInput.createByReal(depth)
-        extrudeInput.setDistanceExtent(False, distance)
-        extrudes.add(extrudeInput)
-    except:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-
-
+    rootComp = design.rootComponent 
+    sketches = rootComp.sketches
+    sketch = sketches.item(sketches.count - 1)  # Letzter Sketch
+    prof = sketch.profiles.item(0)  # Erstes Profil im Sketch
+    extrudes = rootComp.features.extrudeFeatures
+    extrudeInput = extrudes.createInput(prof,adsk.fusion.FeatureOperations.CutFeatureOperation)
+    distance = adsk.core.ValueInput.createByReal(depth)
+    extrudeInput.setDistanceExtent(False, distance)
+    extrudes.add(extrudeInput)
 def extrude_thin(design, ui, thickness,distance):
     """
     Creates a thin-walled extrusion from the last sketch.
@@ -1793,45 +1525,38 @@ def extrude_thin(design, ui, thickness,distance):
     Returns:
         dict: Entity data with feature and body information, or None on failure
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        
-        #ui.messageBox('Select a face for the extrusion.')
-        #selectedFace = ui.selectEntity('Select a face for the extrusion.', 'Profiles').entity
-        selectedFace = sketches.item(sketches.count - 1).profiles.item(0)
-        exts = rootComp.features.extrudeFeatures
-        extInput = exts.createInput(selectedFace, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        extInput.setThinExtrude(adsk.fusion.ThinExtrudeWallLocation.Center,
-                                adsk.core.ValueInput.createByReal(thickness))
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    
+    #ui.messageBox('Select a face for the extrusion.')
+    #selectedFace = ui.selectEntity('Select a face for the extrusion.', 'Profiles').entity
+    selectedFace = sketches.item(sketches.count - 1).profiles.item(0)
+    exts = rootComp.features.extrudeFeatures
+    extInput = exts.createInput(selectedFace, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+    extInput.setThinExtrude(adsk.fusion.ThinExtrudeWallLocation.Center,
+                            adsk.core.ValueInput.createByReal(thickness))
 
-        distanceExtent = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(distance))
-        extInput.setOneSideExtent(distanceExtent, adsk.fusion.ExtentDirections.PositiveExtentDirection)
+    distanceExtent = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(distance))
+    extInput.setOneSideExtent(distanceExtent, adsk.fusion.ExtentDirections.PositiveExtentDirection)
 
-        extrudeFeature = exts.add(extInput)
-        
-        # Collect entity data for the created feature and bodies
-        entity_data = {
-            'feature_token': extrudeFeature.entityToken,
-            'feature_name': extrudeFeature.name,
-            'feature_type': 'ExtrudeThin',
-            'bodies': []
-        }
-        for i in range(extrudeFeature.bodies.count):
-            body = extrudeFeature.bodies.item(i)
-            entity_data['bodies'].append({
-                'body_token': body.entityToken,
-                'body_name': body.name,
-                'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
-            })
-        
-        return entity_data
-    except:
-        if ui:
-            ui.messageBox('Failed extrude_thin:\n{}'.format(traceback.format_exc()))
-        return None
-
-
+    extrudeFeature = exts.add(extInput)
+    
+    # Collect entity data for the created feature and bodies
+    entity_data = {
+        'feature_token': extrudeFeature.entityToken,
+        'feature_name': extrudeFeature.name,
+        'feature_type': 'ExtrudeThin',
+        'bodies': []
+    }
+    for i in range(extrudeFeature.bodies.count):
+        body = extrudeFeature.bodies.item(i)
+        entity_data['bodies'].append({
+            'body_token': body.entityToken,
+            'body_name': body.name,
+            'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
+        })
+    
+    return entity_data
 def draw_cylinder(design, ui, radius, height, x,y,z,plane = "XY"):
     """
     Draws a cylinder with given radius and height at position (x,y,z)
@@ -1839,108 +1564,95 @@ def draw_cylinder(design, ui, radius, height, x,y,z,plane = "XY"):
     Returns:
         dict: Entity data with feature and body information, or None on failure
     """
-    try:
-        rootComp = design.rootComponent
-        sketches = rootComp.sketches
-        xyPlane = rootComp.xYConstructionPlane
-        if plane == "XZ":
-            sketch = sketches.add(rootComp.xZConstructionPlane)
-        elif plane == "YZ":
-            sketch = sketches.add(rootComp.yZConstructionPlane)
-        else:
-            sketch = sketches.add(xyPlane)
+    rootComp = design.rootComponent
+    sketches = rootComp.sketches
+    xyPlane = rootComp.xYConstructionPlane
+    if plane == "XZ":
+        sketch = sketches.add(rootComp.xZConstructionPlane)
+    elif plane == "YZ":
+        sketch = sketches.add(rootComp.yZConstructionPlane)
+    else:
+        sketch = sketches.add(xyPlane)
 
-        center = adsk.core.Point3D.create(x, y, z)
-        sketch.sketchCurves.sketchCircles.addByCenterRadius(center, radius)
+    center = adsk.core.Point3D.create(x, y, z)
+    sketch.sketchCurves.sketchCircles.addByCenterRadius(center, radius)
 
-        prof = sketch.profiles.item(0)
-        extrudes = rootComp.features.extrudeFeatures
-        extInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
-        distance = adsk.core.ValueInput.createByReal(height)
-        extInput.setDistanceExtent(False, distance)
-        extrudeFeature = extrudes.add(extInput)
-        
-        # Collect entity data for the created feature and bodies
-        entity_data = {
-            'feature_token': extrudeFeature.entityToken,
-            'feature_name': extrudeFeature.name,
-            'feature_type': 'Extrude',
-            'bodies': []
-        }
-        for i in range(extrudeFeature.bodies.count):
-            body = extrudeFeature.bodies.item(i)
-            entity_data['bodies'].append({
-                'body_token': body.entityToken,
-                'body_name': body.name,
-                'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
-            })
-        
-        return entity_data
-
-    except:
-        if ui:
-            ui.messageBox('Failed draw_cylinder:\n{}'.format(traceback.format_exc()))
-        return None
-
-
+    prof = sketch.profiles.item(0)
+    extrudes = rootComp.features.extrudeFeatures
+    extInput = extrudes.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+    distance = adsk.core.ValueInput.createByReal(height)
+    extInput.setDistanceExtent(False, distance)
+    extrudeFeature = extrudes.add(extInput)
+    
+    # Collect entity data for the created feature and bodies
+    entity_data = {
+        'feature_token': extrudeFeature.entityToken,
+        'feature_name': extrudeFeature.name,
+        'feature_type': 'Extrude',
+        'bodies': []
+    }
+    for i in range(extrudeFeature.bodies.count):
+        body = extrudeFeature.bodies.item(i)
+        entity_data['bodies'].append({
+            'body_token': body.entityToken,
+            'body_name': body.name,
+            'body_index': rootComp.bRepBodies.count - extrudeFeature.bodies.count + i
+        })
+    
+    return entity_data
 
 def export_as_STL(design, ui,Name):
     """
     No idea whats happening here
     Copied straight up from API examples
     """
-    try:
 
-        rootComp = design.rootComponent
+    rootComp = design.rootComponent
+    
+
+    exportMgr = design.exportManager
+
+    stlRootOptions = exportMgr.createSTLExportOptions(rootComp)
+    
+    directory_name = "Fusion_Exports"
+    FilePath = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop') 
+    Export_dir_path = os.path.join(FilePath, directory_name, Name)
+    os.makedirs(Export_dir_path, exist_ok=True) 
+
+    printUtils = stlRootOptions.availablePrintUtilities
+
+    # export the root component to the print utility, instead of a specified file            
+    for printUtil in printUtils:
+        stlRootOptions.sendToPrintUtility = True
+        stlRootOptions.printUtility = printUtil
+
+        exportMgr.execute(stlRootOptions)
         
 
-        exportMgr = design.exportManager
-
-        stlRootOptions = exportMgr.createSTLExportOptions(rootComp)
+    
+    # export the occurrence one by one in the root component to a specified file
+    allOccu = rootComp.allOccurrences
+    for occ in allOccu:
+        Name = Export_dir_path + "/" + occ.component.name
         
-        directory_name = "Fusion_Exports"
-        FilePath = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop') 
-        Export_dir_path = os.path.join(FilePath, directory_name, Name)
-        os.makedirs(Export_dir_path, exist_ok=True) 
-
-        printUtils = stlRootOptions.availablePrintUtilities
-
-        # export the root component to the print utility, instead of a specified file            
-        for printUtil in printUtils:
-            stlRootOptions.sendToPrintUtility = True
-            stlRootOptions.printUtility = printUtil
-
-            exportMgr.execute(stlRootOptions)
-            
-
+        # create stl exportOptions
+        stlExportOptions = exportMgr.createSTLExportOptions(occ, Name)
+        stlExportOptions.sendToPrintUtility = False
         
-        # export the occurrence one by one in the root component to a specified file
-        allOccu = rootComp.allOccurrences
-        for occ in allOccu:
-            Name = Export_dir_path + "/" + occ.component.name
-            
-            # create stl exportOptions
-            stlExportOptions = exportMgr.createSTLExportOptions(occ, Name)
-            stlExportOptions.sendToPrintUtility = False
-            
-            exportMgr.execute(stlExportOptions)
+        exportMgr.execute(stlExportOptions)
 
-        # export the body one by one in the design to a specified file
-        allBodies = rootComp.bRepBodies
-        for body in allBodies:
-            Name = Export_dir_path + "/" + body.parentComponent.name + '-' + body.name 
-            
-            # create stl exportOptions
-            stlExportOptions = exportMgr.createSTLExportOptions(body, Name)
-            stlExportOptions.sendToPrintUtility = False
-            
-            exportMgr.execute(stlExportOptions)
-            
-        ui.messageBox(f"Exported STL to: {Export_dir_path}")
-    except:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-
+    # export the body one by one in the design to a specified file
+    allBodies = rootComp.bRepBodies
+    for body in allBodies:
+        Name = Export_dir_path + "/" + body.parentComponent.name + '-' + body.name 
+        
+        # create stl exportOptions
+        stlExportOptions = exportMgr.createSTLExportOptions(body, Name)
+        stlExportOptions.sendToPrintUtility = False
+        
+        exportMgr.execute(stlExportOptions)
+        
+    ui.messageBox(f"Exported STL to: {Export_dir_path}")
 def get_model_parameters(design):
     model_params = []
     user_params = design.userParameters
@@ -1959,141 +1671,111 @@ def get_model_parameters(design):
     return model_params
 
 def set_parameter(design, ui, name, value):
-    try:
-        param = design.allParameters.itemByName(name)
-        param.expression = value
-    except:
-        if ui:
-            ui.messageBox('Failed set_parameter:\n{}'.format(traceback.format_exc()))
-
+    param = design.allParameters.itemByName(name)
+    param.expression = value
 def holes(design, ui, points, width=1.0,distance = 1.0,faceindex=0):
     """
     Create one or more holes on a selected face.
     """
    
-    try:
-        rootComp = design.rootComponent
-        holes = rootComp.features.holeFeatures
-        sketches = rootComp.sketches
-        
-        
-        rootComp = design.rootComponent
-        bodies = rootComp.bRepBodies
+    rootComp = design.rootComponent
+    holes = rootComp.features.holeFeatures
+    sketches = rootComp.sketches
+    
+    
+    rootComp = design.rootComponent
+    bodies = rootComp.bRepBodies
 
-        if bodies.count > 0:
-            latest_body = bodies.item(bodies.count - 1)
-        else:
-            ui.messageBox("No bodies found.")
-            return
-        entities = adsk.core.ObjectCollection.create()
-        entities.add(latest_body.faces.item(faceindex))
-        sk = sketches.add(latest_body.faces.item(faceindex))# create sketch on faceindex face
+    if bodies.count > 0:
+        latest_body = bodies.item(bodies.count - 1)
+    else:
+        ui.messageBox("No bodies found.")
+        return
+    entities = adsk.core.ObjectCollection.create()
+    entities.add(latest_body.faces.item(faceindex))
+    sk = sketches.add(latest_body.faces.item(faceindex))# create sketch on faceindex face
 
-        tipangle = 90.0
-        for i in range(len(points)):
-            holePoint = sk.sketchPoints.add(adsk.core.Point3D.create(points[i][0], points[i][1], 0))
-            tipangle = adsk.core.ValueInput.createByString('180 deg')
-            holedistance = adsk.core.ValueInput.createByReal(distance)
-        
-            holeDiam = adsk.core.ValueInput.createByReal(width)
-            holeInput = holes.createSimpleInput(holeDiam)
-            holeInput.tipAngle = tipangle
-            holeInput.setPositionBySketchPoint(holePoint)
-            holeInput.setDistanceExtent(holedistance)
+    tipangle = 90.0
+    for i in range(len(points)):
+        holePoint = sk.sketchPoints.add(adsk.core.Point3D.create(points[i][0], points[i][1], 0))
+        tipangle = adsk.core.ValueInput.createByString('180 deg')
+        holedistance = adsk.core.ValueInput.createByReal(distance)
+    
+        holeDiam = adsk.core.ValueInput.createByReal(width)
+        holeInput = holes.createSimpleInput(holeDiam)
+        holeInput.tipAngle = tipangle
+        holeInput.setPositionBySketchPoint(holePoint)
+        holeInput.setDistanceExtent(holedistance)
 
-        # Add the hole
-            holes.add(holeInput)
-    except Exception:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-
-
-
+    # Add the hole
+        holes.add(holeInput)
 def select_body(design,ui,Bodyname):
-    try: 
-        rootComp = design.rootComponent 
-        target_body = rootComp.bRepBodies.itemByName(Bodyname)
-        if target_body is None:
-            ui.messageBox(f"Body with the name:  '{Bodyname}' could not be found.")
+    rootComp = design.rootComponent 
+    target_body = rootComp.bRepBodies.itemByName(Bodyname)
+    if target_body is None:
+        ui.messageBox(f"Body with the name:  '{Bodyname}' could not be found.")
 
-        return target_body
-
-    except : 
-        if ui :
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
+    return target_body
 
 def select_sketch(design,ui,Sketchname):
-    try: 
-        rootComp = design.rootComponent 
-        target_sketch = rootComp.sketches.itemByName(Sketchname)
-        if target_sketch is None:
-            ui.messageBox(f"Sketch with the name:  '{Sketchname}' could not be found.")
+    rootComp = design.rootComponent 
+    target_sketch = rootComp.sketches.itemByName(Sketchname)
+    if target_sketch is None:
+        ui.messageBox(f"Sketch with the name:  '{Sketchname}' could not be found.")
 
-        return target_sketch
-
-    except : 
-        if ui :
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
+    return target_sketch
 
 def list_entities(design, ui):
-    try:
-        rootComp = design.rootComponent
-        bodies = []
-        for i in range(rootComp.bRepBodies.count):
-            body = rootComp.bRepBodies.item(i)
-            bodies.append({
-                "name": body.name,
-                "index": i,
-                "body_token": getattr(body, "entityToken", None),
-                "is_visible": body.isVisible
-            })
+    rootComp = design.rootComponent
+    bodies = []
+    for i in range(rootComp.bRepBodies.count):
+        body = rootComp.bRepBodies.item(i)
+        bodies.append({
+            "name": body.name,
+            "index": i,
+            "body_token": getattr(body, "entityToken", None),
+            "is_visible": body.isVisible
+        })
 
-        sketches = []
-        for i in range(rootComp.sketches.count):
-            sketch = rootComp.sketches.item(i)
-            sketches.append({
-                "name": sketch.name,
-                "index": i,
-                "sketch_token": getattr(sketch, "entityToken", None),
-                "is_visible": sketch.isVisible
-            })
+    sketches = []
+    for i in range(rootComp.sketches.count):
+        sketch = rootComp.sketches.item(i)
+        sketches.append({
+            "name": sketch.name,
+            "index": i,
+            "sketch_token": getattr(sketch, "entityToken", None),
+            "is_visible": sketch.isVisible
+        })
 
-        axes = []
-        seen = set()
+    axes = []
+    seen = set()
 
-        def add_axis(axis, axis_type, index):
-            if axis is None:
-                return
-            token = getattr(axis, "entityToken", None)
-            key = token if token else f"{axis_type}:{getattr(axis, 'name', '')}:{index}"
-            if key in seen:
-                return
-            seen.add(key)
-            axes.append({
-                "name": axis.name,
-                "index": index,
-                "axis_token": token,
-                "axis_type": axis_type,
-                "is_visible": getattr(axis, "isVisible", None)
-            })
+    def add_axis(axis, axis_type, index):
+        if axis is None:
+            return
+        token = getattr(axis, "entityToken", None)
+        key = token if token else f"{axis_type}:{getattr(axis, 'name', '')}:{index}"
+        if key in seen:
+            return
+        seen.add(key)
+        axes.append({
+            "name": axis.name,
+            "index": index,
+            "axis_token": token,
+            "axis_type": axis_type,
+            "is_visible": getattr(axis, "isVisible", None)
+        })
 
-        add_axis(rootComp.xConstructionAxis, "origin", -1)
-        add_axis(rootComp.yConstructionAxis, "origin", -1)
-        add_axis(rootComp.zConstructionAxis, "origin", -1)
+    add_axis(rootComp.xConstructionAxis, "origin", -1)
+    add_axis(rootComp.yConstructionAxis, "origin", -1)
+    add_axis(rootComp.zConstructionAxis, "origin", -1)
 
-        for i in range(rootComp.constructionAxes.count):
-            axis = rootComp.constructionAxes.item(i)
-            add_axis(axis, "construction", i)
+    for i in range(rootComp.constructionAxes.count):
+        axis = rootComp.constructionAxes.item(i)
+        add_axis(axis, "construction", i)
 
-        return {"bodies": bodies, "sketches": sketches, "axes": axes}
+    return {"bodies": bodies, "sketches": sketches, "axes": axes}
 
-    except:
-        if ui:
-            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-        return {"bodies": [], "sketches": [], "axes": []}
-
-
-# HTTP Server######
 class Handler(BaseHTTPRequestHandler):
     
     def queue_task_and_wait(self, task_tuple, timeout=10.0):
