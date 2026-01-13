@@ -8,7 +8,7 @@ import queue
 from pathlib import Path
 import math
 import os
-from .config import SERVER_HOST, SERVER_PORT
+from .config import SERVER_HOST, SERVER_PORT, SHOW_STARTUP_MESSAGES
 
 ModelParameterSnapshot = []
 httpd = None
@@ -179,6 +179,7 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
                     task[5],
                     task[6],
                     task[7],
+                    task[8] if len(task) > 8 else None,  # target_face
                 )
             elif task[0] == "draw_witzenmann":
                 draw_Witzenmann(design, ui, task[1], task[2])
@@ -190,7 +191,15 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
                 export_as_STEP(design, ui, task[1])
             elif task[0] == "draw_cylinder":
                 entity_data = draw_cylinder(
-                    design, ui, task[1], task[2], task[3], task[4], task[5], task[6]
+                    design,
+                    ui,
+                    task[1],
+                    task[2],
+                    task[3],
+                    task[4],
+                    task[5],
+                    task[6],
+                    task[7] if len(task) > 7 else None,  # target_face
                 )
             elif task[0] == "shell_body":
                 shell_existing_body(design, ui, task[1], task[2])
@@ -223,7 +232,16 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
             elif task[0] == "holes":
                 holes(design, ui, task[1], task[2], task[3], task[4])
             elif task[0] == "circle":
-                draw_circle(design, ui, task[1], task[2], task[3], task[4], task[5])
+                draw_circle(
+                    design,
+                    ui,
+                    task[1],
+                    task[2],
+                    task[3],
+                    task[4],
+                    task[5],
+                    task[6] if len(task) > 6 else None,  # target_face
+                )
             elif task[0] == "extrude_thin":
                 entity_data = extrude_thin(design, ui, task[1], task[2])
             elif task[0] == "select_body":
@@ -259,7 +277,13 @@ class TaskEventHandler(adsk.core.CustomEventHandler):
                 )
             elif task[0] == "draw_sphere":
                 entity_data = create_sphere(
-                    design, ui, task[1], task[2], task[3], task[4]
+                    design,
+                    ui,
+                    task[1],
+                    task[2],
+                    task[3],
+                    task[4],
+                    task[5] if len(task) > 5 else None,  # target_face
                 )
             elif task[0] == "threaded":
                 create_thread(design, ui, task[1], task[2])
@@ -444,9 +468,12 @@ def draw_text(
     return entity_data
 
 
-def create_sphere(design, ui, radius, x, y, z):
+def create_sphere(design, ui, radius, x, y, z, target_face=None):
     """
     Creates a sphere by revolving a circle profile.
+
+    Args:
+        target_face: Optional dict with body_token/body_index and face_index to draw on existing surface
 
     Returns:
         dict: Entity data with feature and body information, or None on failure
@@ -456,8 +483,13 @@ def create_sphere(design, ui, radius, x, y, z):
     # Create a new sketch on the xy plane.
     sketches = rootComp.sketches
 
-    xyPlane = rootComp.xYConstructionPlane
-    sketch = sketches.add(xyPlane)
+    # Check if we should draw on an existing face
+    face = get_face_from_target(design, ui, target_face)
+    if face:
+        sketch = sketches.add(face)
+    else:
+        xyPlane = rootComp.xYConstructionPlane
+        sketch = sketches.add(xyPlane)
     # Draw a circle.
     circles = sketch.sketchCurves.sketchCircles
     circles.addByCenterRadius(adsk.core.Point3D.create(x, y, z), radius)
@@ -503,10 +535,13 @@ def create_sphere(design, ui, radius, x, y, z):
     return entity_data
 
 
-def draw_Box(design, ui, height, width, depth, x, y, z, plane=None):
+def draw_Box(design, ui, height, width, depth, x, y, z, plane=None, target_face=None):
     """
     Draws Box with given dimensions height, width, depth at position (x,y,z)
     z creates an offset construction plane
+
+    Args:
+        target_face: Optional dict with body_token/body_index and face_index to draw on existing surface
 
     Returns:
         dict: Entity data with feature and body information, or None on failure
@@ -515,23 +550,28 @@ def draw_Box(design, ui, height, width, depth, x, y, z, plane=None):
     sketches = rootComp.sketches
     planes = rootComp.constructionPlanes
 
-    # Choose base plane based on parameter
-    if plane == "XZ":
-        basePlane = rootComp.xZConstructionPlane
-    elif plane == "YZ":
-        basePlane = rootComp.yZConstructionPlane
+    # Check if we should draw on an existing face
+    face = get_face_from_target(design, ui, target_face)
+    if face:
+        sketch = sketches.add(face)
     else:
-        basePlane = rootComp.xYConstructionPlane
+        # Choose base plane based on parameter
+        if plane == "XZ":
+            basePlane = rootComp.xZConstructionPlane
+        elif plane == "YZ":
+            basePlane = rootComp.yZConstructionPlane
+        else:
+            basePlane = rootComp.xYConstructionPlane
 
-    # Create offset plane at z if z != 0
-    if z != 0:
-        planeInput = planes.createInput()
-        offsetValue = adsk.core.ValueInput.createByReal(z)
-        planeInput.setByOffset(basePlane, offsetValue)
-        offsetPlane = planes.add(planeInput)
-        sketch = sketches.add(offsetPlane)
-    else:
-        sketch = sketches.add(basePlane)
+        # Create offset plane at z if z != 0
+        if z != 0:
+            planeInput = planes.createInput()
+            offsetValue = adsk.core.ValueInput.createByReal(z)
+            planeInput.setByOffset(basePlane, offsetValue)
+            offsetPlane = planes.add(planeInput)
+            sketch = sketches.add(offsetPlane)
+        else:
+            sketch = sketches.add(basePlane)
 
     lines = sketch.sketchCurves.sketchLines
     # addCenterPointRectangle: (center, corner-relative-to-center)
@@ -652,57 +692,67 @@ def draw_2d_rect(design, ui, x_1, y_1, z_1, x_2, y_2, z_2, plane="XY"):
     rectangles.addTwoPointRectangle(point_1, points_2)
 
 
-def draw_circle(design, ui, radius, x, y, z, plane="XY"):
+def draw_circle(design, ui, radius, x, y, z, plane="XY", target_face=None):
     """
     Draws a circle with given radius at position (x,y,z) on the specified plane
     Plane can be "XY", "XZ", or "YZ"
     For XY plane: circle at (x,y) with z offset
     For XZ plane: circle at (x,z) with y offset
     For YZ plane: circle at (y,z) with x offset
+
+    Args:
+        target_face: Optional dict with body_token/body_index and face_index to draw on existing surface
     """
     rootComp = design.rootComponent
     sketches = rootComp.sketches
     planes = rootComp.constructionPlanes
 
-    # Determine which plane and coordinates to use
-    if plane == "XZ":
-        basePlane = rootComp.xZConstructionPlane
-        # For XZ plane: x and z are in-plane, y is the offset
-        if y != 0:
-            planeInput = planes.createInput()
-            offsetValue = adsk.core.ValueInput.createByReal(y)
-            planeInput.setByOffset(basePlane, offsetValue)
-            offsetPlane = planes.add(planeInput)
-            sketch = sketches.add(offsetPlane)
-        else:
-            sketch = sketches.add(basePlane)
-        centerPoint = adsk.core.Point3D.create(x, z, 0)
-
-    elif plane == "YZ":
-        basePlane = rootComp.yZConstructionPlane
-        # For YZ plane: y and z are in-plane, x is the offset
-        if x != 0:
-            planeInput = planes.createInput()
-            offsetValue = adsk.core.ValueInput.createByReal(x)
-            planeInput.setByOffset(basePlane, offsetValue)
-            offsetPlane = planes.add(planeInput)
-            sketch = sketches.add(offsetPlane)
-        else:
-            sketch = sketches.add(basePlane)
-        centerPoint = adsk.core.Point3D.create(y, z, 0)
-
-    else:  # XY plane (default)
-        basePlane = rootComp.xYConstructionPlane
-        # For XY plane: x and y are in-plane, z is the offset
-        if z != 0:
-            planeInput = planes.createInput()
-            offsetValue = adsk.core.ValueInput.createByReal(z)
-            planeInput.setByOffset(basePlane, offsetValue)
-            offsetPlane = planes.add(planeInput)
-            sketch = sketches.add(offsetPlane)
-        else:
-            sketch = sketches.add(basePlane)
+    # Check if we should draw on an existing face
+    face = get_face_from_target(design, ui, target_face)
+    if face:
+        sketch = sketches.add(face)
+        # When drawing on a face, use x,y as local coordinates on that face
         centerPoint = adsk.core.Point3D.create(x, y, 0)
+    else:
+        # Determine which plane and coordinates to use
+        if plane == "XZ":
+            basePlane = rootComp.xZConstructionPlane
+            # For XZ plane: x and z are in-plane, y is the offset
+            if y != 0:
+                planeInput = planes.createInput()
+                offsetValue = adsk.core.ValueInput.createByReal(y)
+                planeInput.setByOffset(basePlane, offsetValue)
+                offsetPlane = planes.add(planeInput)
+                sketch = sketches.add(offsetPlane)
+            else:
+                sketch = sketches.add(basePlane)
+            centerPoint = adsk.core.Point3D.create(x, z, 0)
+
+        elif plane == "YZ":
+            basePlane = rootComp.yZConstructionPlane
+            # For YZ plane: y and z are in-plane, x is the offset
+            if x != 0:
+                planeInput = planes.createInput()
+                offsetValue = adsk.core.ValueInput.createByReal(x)
+                planeInput.setByOffset(basePlane, offsetValue)
+                offsetPlane = planes.add(planeInput)
+                sketch = sketches.add(offsetPlane)
+            else:
+                sketch = sketches.add(basePlane)
+            centerPoint = adsk.core.Point3D.create(y, z, 0)
+
+        else:  # XY plane (default)
+            basePlane = rootComp.xYConstructionPlane
+            # For XY plane: x and y are in-plane, z is the offset
+            if z != 0:
+                planeInput = planes.createInput()
+                offsetValue = adsk.core.ValueInput.createByReal(z)
+                planeInput.setByOffset(basePlane, offsetValue)
+                offsetPlane = planes.add(planeInput)
+                sketch = sketches.add(offsetPlane)
+            else:
+                sketch = sketches.add(basePlane)
+            centerPoint = adsk.core.Point3D.create(x, y, 0)
 
     circles = sketch.sketchCurves.sketchCircles
     circles.addByCenterRadius(centerPoint, radius)
@@ -826,6 +876,45 @@ def find_entity_by_token(design, token):
         return None
     except:
         return None
+
+
+def get_face_from_target(design, ui, target_face):
+    """
+    Get a face to use as a sketch plane from target_face specification.
+
+    Args:
+        design: The active Fusion design
+        ui: The user interface object
+        target_face: Dict with either:
+            - body_token and face_index: to identify face by body token
+            - body_index and face_index: to identify face by body index
+
+    Returns:
+        The face object if found, None otherwise
+    """
+    if target_face is None:
+        return None
+
+    rootComp = design.rootComponent
+    face_index = target_face.get("face_index", 0)
+
+    # Try to get body by token first
+    body_token = target_face.get("body_token")
+    if body_token:
+        body = find_entity_by_token(design, body_token)
+        if body and body.faces.count > face_index:
+            return body.faces.item(face_index)
+
+    # Fall back to body index
+    body_index = target_face.get("body_index")
+    if body_index is not None:
+        bodies = rootComp.bRepBodies
+        if bodies.count > body_index:
+            body = bodies.item(body_index)
+            if body.faces.count > face_index:
+                return body.faces.item(face_index)
+
+    return None
 
 
 def move_body_by_token(design, ui, body_token, x, y, z):
@@ -1814,22 +1903,31 @@ def extrude_thin(design, ui, thickness, distance):
     return entity_data
 
 
-def draw_cylinder(design, ui, radius, height, x, y, z, plane="XY"):
+def draw_cylinder(design, ui, radius, height, x, y, z, plane="XY", target_face=None):
     """
     Draws a cylinder with given radius and height at position (x,y,z)
+
+    Args:
+        target_face: Optional dict with body_token/body_index and face_index to draw on existing surface
 
     Returns:
         dict: Entity data with feature and body information, or None on failure
     """
     rootComp = design.rootComponent
     sketches = rootComp.sketches
-    xyPlane = rootComp.xYConstructionPlane
-    if plane == "XZ":
-        sketch = sketches.add(rootComp.xZConstructionPlane)
-    elif plane == "YZ":
-        sketch = sketches.add(rootComp.yZConstructionPlane)
+
+    # Check if we should draw on an existing face
+    face = get_face_from_target(design, ui, target_face)
+    if face:
+        sketch = sketches.add(face)
     else:
-        sketch = sketches.add(xyPlane)
+        xyPlane = rootComp.xYConstructionPlane
+        if plane == "XZ":
+            sketch = sketches.add(rootComp.xZConstructionPlane)
+        elif plane == "YZ":
+            sketch = sketches.add(rootComp.yZConstructionPlane)
+        else:
+            sketch = sketches.add(xyPlane)
 
     center = adsk.core.Point3D.create(x, y, z)
     sketch.sketchCurves.sketchCircles.addByCenterRadius(center, radius)
@@ -2138,8 +2236,11 @@ class Handler(BaseHTTPRequestHandler):
                 y = float(data.get("y", 0))
                 z = float(data.get("z", 0))
                 Plane = data.get("plane", None)  # 'XY', 'XZ', 'YZ' or None
+                target_face = data.get(
+                    "target_face", None
+                )  # Optional: {body_token, face_index}
                 response = self.queue_task_and_wait(
-                    ("draw_box", height, width, depth, x, y, z, Plane)
+                    ("draw_box", height, width, depth, x, y, z, Plane, target_face)
                 )
                 self.send_json_response(
                     response, 200 if response.get("success") else 500
@@ -2193,8 +2294,11 @@ class Handler(BaseHTTPRequestHandler):
                 y = float(data.get("y", 0))
                 z = float(data.get("z", 0))
                 plane = data.get("plane", "XY")
+                target_face = data.get(
+                    "target_face", None
+                )  # Optional: {body_token, face_index}
                 response = self.queue_task_and_wait(
-                    ("draw_cylinder", radius, height, x, y, z, plane)
+                    ("draw_cylinder", radius, height, x, y, z, plane, target_face)
                 )
                 self.send_json_response(
                     response, 200 if response.get("success") else 500
@@ -2283,7 +2387,12 @@ class Handler(BaseHTTPRequestHandler):
                 y = float(data.get("y", 0))
                 z = float(data.get("z", 0))
                 plane = data.get("plane", "XY")
-                response = self.queue_task_and_wait(("circle", radius, x, y, z, plane))
+                target_face = data.get(
+                    "target_face", None
+                )  # Optional: {body_token, face_index}
+                response = self.queue_task_and_wait(
+                    ("circle", radius, x, y, z, plane, target_face)
+                )
                 self.send_json_response(
                     response, 200 if response.get("success") else 500
                 )
@@ -2394,7 +2503,12 @@ class Handler(BaseHTTPRequestHandler):
                 x = float(data.get("x", 0))
                 y = float(data.get("y", 0))
                 z = float(data.get("z", 0))
-                response = self.queue_task_and_wait(("draw_sphere", radius, x, y, z))
+                target_face = data.get(
+                    "target_face", None
+                )  # Optional: {body_token, face_index}
+                response = self.queue_task_and_wait(
+                    ("draw_sphere", radius, x, y, z, target_face)
+                )
                 self.send_json_response(
                     response, 200 if response.get("success") else 500
                 )
@@ -2627,9 +2741,10 @@ def run(context):
         taskThread.daemon = True
         taskThread.start()
 
-        ui.messageBox(
-            f"Fusion HTTP Add-In started! Port {SERVER_PORT}.\nParameters loaded: {len(ModelParameterSnapshot)} model parameters"
-        )
+        if SHOW_STARTUP_MESSAGES:
+            ui.messageBox(
+                f"Fusion HTTP Add-In started! Port {SERVER_PORT}.\nParameters loaded: {len(ModelParameterSnapshot)} model parameters"
+            )
 
         # HTTP-Server starten
         threading.Thread(target=run_server, daemon=True).start()
@@ -2685,7 +2800,7 @@ def stop(context):
         app = adsk.core.Application.get()
         if app:
             ui = app.userInterface
-            if ui:
+            if ui and SHOW_STARTUP_MESSAGES:
                 ui.messageBox("Fusion HTTP Add-In stopped")
     except:
         pass

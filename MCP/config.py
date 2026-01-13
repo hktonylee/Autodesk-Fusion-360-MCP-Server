@@ -51,3 +51,6 @@ HEADERS = {"Content-Type": "application/json"}
 
 # Timeouts (in Sekunden)
 REQUEST_TIMEOUT = 30
+
+# UI Settings
+SHOW_STARTUP_MESSAGES = False  # Show popup messages on add-in load/unload

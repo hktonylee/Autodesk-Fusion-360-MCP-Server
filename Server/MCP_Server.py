@@ -448,15 +448,28 @@ def change_parameter(name: str, value: str):
 
 @mcp.tool()
 def draw_cylinder(
-    radius: float, height: float, x: float, y: float, z: float, plane: str = "XY"
+    radius: float,
+    height: float,
+    x: float,
+    y: float,
+    z: float,
+    plane: str = "XY",
+    target_face: dict = None,
 ):
     """
     Draw a cylinder. You can work in the XY plane.
     There are default values.
+
+    To draw on an existing surface (making objects dependent on each other):
+    Pass target_face as a dict with body_token and face_index to draw on a face of an existing body.
+    Example: {"body_token": "...", "face_index": 1}
+    The body_token is returned when creating objects (from entity_data.bodies[].body_token).
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["draw_cylinder"]
     data = {"radius": radius, "height": height, "x": x, "y": y, "z": z, "plane": plane}
+    if target_face:
+        data["target_face"] = target_face
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw_cylinder")
 
@@ -470,6 +483,7 @@ def draw_box(
     y_value: float,
     z_value: float,
     plane: str = "XY",
+    target_face: dict = None,
 ):
     """
     You can pass the height, width, and depth of the box as strings.
@@ -495,6 +509,12 @@ def draw_box(
 
     Example: "XY", "YZ", "XZ"
 
+    To draw on an existing surface (making objects dependent on each other):
+    Pass target_face as a dict with body_token and face_index to draw on a face of an existing body.
+    Example: {"body_token": "...", "face_index": 1}
+    The body_token is returned when creating objects (from entity_data.bodies[].body_token).
+    Common face indices: For cylinders, top=1, bottom=2. For boxes, top=4.
+
     """
     endpoint = config.ENDPOINTS["draw_box"]
     headers = config.HEADERS
@@ -507,6 +527,8 @@ def draw_box(
         "z": z_value,
         "Plane": plane,
     }
+    if target_face:
+        data["target_face"] = target_face
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw_box")
 
@@ -534,7 +556,7 @@ def shell_body(thickness: float, faceindex: int):
 
 
 @mcp.tool()
-def draw_sphere(x: float, y: float, z: float, radius: float):
+def draw_sphere(x: float, y: float, z: float, radius: float, target_face: dict = None):
     """
     Draw a sphere in Fusion 360.
     You can pass the coordinates as floats.
@@ -547,10 +569,16 @@ def draw_sphere(x: float, y: float, z: float, radius: float):
         "z":0,
         "radius":5
     }
+
+    To draw on an existing surface (making objects dependent on each other):
+    Pass target_face as a dict with body_token and face_index to draw on a face of an existing body.
+    Example: {"body_token": "...", "face_index": 1}
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["draw_sphere"]
     data = {"x": x, "y": y, "z": z, "radius": radius}
+    if target_face:
+        data["target_face"] = target_face
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw_sphere")
 
@@ -825,7 +853,14 @@ def ellipsie(
 
 
 @mcp.tool()
-def draw2Dcircle(radius: float, x: float, y: float, z: float, plane: str = "XY"):
+def draw2Dcircle(
+    radius: float,
+    x: float,
+    y: float,
+    z: float,
+    plane: str = "XY",
+    target_face: dict = None,
+):
     """
     Draw a circle in Fusion 360.
     You can pass the radius as a float.
@@ -846,10 +881,17 @@ def draw2Dcircle(radius: float, x: float, y: float, z: float, plane: str = "XY")
         "z":0,
         "plane":"XY"
     }
+
+    To draw on an existing surface (making objects dependent on each other):
+    Pass target_face as a dict with body_token and face_index to draw on a face of an existing body.
+    Example: {"body_token": "...", "face_index": 1}
+    When drawing on a face, x and y are local coordinates on that face.
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["draw2Dcircle"]
     data = {"radius": radius, "x": x, "y": y, "z": z, "plane": plane}
+    if target_face:
+        data["target_face"] = target_face
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw2Dcircle")
 
