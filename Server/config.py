@@ -53,9 +53,7 @@ ENDPOINTS = {
 }
 
 # Request Headers
-HEADERS = {
-    "Content-Type": "application/json"
-}
+HEADERS = {"Content-Type": "application/json"}
 
 # Timeouts (in Sekunden)
 REQUEST_TIMEOUT = 30

@@ -9,11 +9,7 @@ from .paletteSend import entry as paletteSend
 
 # TODO add your imported modules to this list.
 # Fusion will automatically call the start() and stop() functions.
-commands = [
-    commandDialog,
-    paletteShow,
-    paletteSend
-]
+commands = [commandDialog, paletteShow, paletteSend]
 
 
 # Assumes you defined a "start" function in each of your modules.

@@ -1,7 +1,7 @@
 # Fusion 360 API Configuration
 
 # Server Configuration
-SERVER_HOST = 'localhost'
+SERVER_HOST = "localhost"
 SERVER_PORT = 5000
 
 # Base URL für den Fusion 360 Server
@@ -43,14 +43,11 @@ ENDPOINTS = {
     "boolean_operation": f"{BASE_URL}/boolean_operation",
     "draw_2d_rectangle": f"{BASE_URL}/draw_2d_rectangle",
     "rectangular_pattern": f"{BASE_URL}/rectangular_pattern",
-    "delete_entity_by_token": f"{BASE_URL}/delete_entity_by_token"
-    
+    "delete_entity_by_token": f"{BASE_URL}/delete_entity_by_token",
 }
 
 # Request Headers
-HEADERS = {
-    "Content-Type": "application/json"
-}
+HEADERS = {"Content-Type": "application/json"}
 
 # Timeouts (in Sekunden)
 REQUEST_TIMEOUT = 30

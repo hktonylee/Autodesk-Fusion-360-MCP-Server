@@ -6,17 +6,20 @@ from mcp.server.fastmcp import FastMCP
 import config
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 class FusionAPIError(Exception):
     """Custom exception for Fusion 360 API errors"""
+
     def __init__(self, message, error_details=None, traceback_info=None):
         super().__init__(message)
         self.message = message
         self.error_details = error_details
         self.traceback_info = traceback_info
-    
+
     def __str__(self):
         result = self.message
         if self.error_details:
@@ -26,13 +29,9 @@ class FusionAPIError(Exception):
         return result
 
 
-
-
-
-
-mcp = FastMCP("Fusion",
-              
-              instructions =   """You are an extremely friendly assistant for Fusion 360.
+mcp = FastMCP(
+    "Fusion",
+    instructions="""You are an extremely friendly assistant for Fusion 360.
                 You only answer questions related to Fusion 360.
                 You may only use the tools defined in the prompt system.
                 Take a moment after each tool call to consider the next step and re-read the prompt and docstrings.
@@ -101,9 +100,8 @@ mcp = FastMCP("Fusion",
 
                 **DrawBox or DrawCylinder:**
                 - The specified coordinates are always the center of the body.
-                """
-
-                )
+                """,
+)
 
 
 def send_request(endpoint, data, headers, timeout=15):
@@ -119,7 +117,7 @@ def send_request(endpoint, data, headers, timeout=15):
     """
     max_retries = 3  # Retry up to 3 times for transient errors
     last_exception = None
-    
+
     for attempt in range(max_retries):
         try:
             json_data = json.dumps(data)
@@ -132,27 +130,29 @@ def send_request(endpoint, data, headers, timeout=15):
                 logging.error("Failed to decode JSON response: %s", e)
                 raise FusionAPIError(
                     f"Invalid JSON response from Fusion 360",
-                    error_details=response.text[:500] if response.text else None
+                    error_details=response.text[:500] if response.text else None,
                 )
-            
+
             # Check if the response indicates an error
-            if not response_data.get('success', True):
-                error_msg = response_data.get('message', 'Unknown error from Fusion 360')
-                error_details = response_data.get('error')
-                traceback_info = response_data.get('traceback')
-                
+            if not response_data.get("success", True):
+                error_msg = response_data.get(
+                    "message", "Unknown error from Fusion 360"
+                )
+                error_details = response_data.get("error")
+                traceback_info = response_data.get("traceback")
+
                 logging.error("Fusion 360 API error: %s", error_msg)
                 if error_details:
                     logging.error("Error details: %s", error_details)
-                
+
                 raise FusionAPIError(
                     error_msg,
                     error_details=error_details,
-                    traceback_info=traceback_info
+                    traceback_info=traceback_info,
                 )
-            
+
             # Success - return the response data
-            logging.info("Request successful: %s", response_data.get('message', 'OK'))
+            logging.info("Request successful: %s", response_data.get("message", "OK"))
             return response_data
 
         except FusionAPIError:
@@ -165,7 +165,7 @@ def send_request(endpoint, data, headers, timeout=15):
             if attempt == max_retries - 1:
                 raise FusionAPIError(
                     "Request to Fusion 360 timed out. The operation may still be in progress.",
-                    error_details=str(e)
+                    error_details=str(e),
                 )
 
         except requests.ConnectionError as e:
@@ -174,7 +174,7 @@ def send_request(endpoint, data, headers, timeout=15):
             if attempt == max_retries - 1:
                 raise FusionAPIError(
                     "Cannot connect to Fusion 360. Make sure the MCP add-in is running.",
-                    error_details=str(e)
+                    error_details=str(e),
                 )
 
         except requests.RequestException as e:
@@ -182,63 +182,62 @@ def send_request(endpoint, data, headers, timeout=15):
             last_exception = e
             if attempt == max_retries - 1:
                 raise FusionAPIError(
-                    f"Request to Fusion 360 failed: {str(e)}",
-                    error_details=str(e)
+                    f"Request to Fusion 360 failed: {str(e)}", error_details=str(e)
                 )
 
         except Exception as e:
             logging.error("Unexpected error: %s", e)
             raise FusionAPIError(
                 f"Unexpected error communicating with Fusion 360: {str(e)}",
-                error_details=str(e)
+                error_details=str(e),
             )
+
 
 def format_tool_response(response_data, operation_name):
     """
     Format the response for MCP client.
     Returns a dict with success status, message, and entity_data if available.
-    
+
     entity_data contains identifiers for created objects:
     - feature_token: Persistent token for the feature (survives file saves)
     - feature_name: Name of the feature in timeline (e.g., "Extrude1")
     - feature_type: Type of feature (Extrude, Revolve, Loft, Sweep, etc.)
     - bodies: List of created bodies with their tokens, names, and indices
     """
-    if response_data.get('success'):
+    if response_data.get("success"):
         result = {
             "status": "success",
             "operation": operation_name,
-            "message": response_data.get('message', f'{operation_name} completed successfully')
+            "message": response_data.get(
+                "message", f"{operation_name} completed successfully"
+            ),
         }
         # Include entity_data if present (for operations that create geometry)
-        entity_data = response_data.get('entity_data')
+        entity_data = response_data.get("entity_data")
         if entity_data:
             result["entity_data"] = entity_data
         return result
     else:
         return {
-            "status": "error", 
+            "status": "error",
             "operation": operation_name,
-            "message": response_data.get('message', 'Unknown error'),
-            "error": response_data.get('error')
+            "message": response_data.get("message", "Unknown error"),
+            "error": response_data.get("error"),
         }
 
 
 @mcp.tool()
-def move_latest_body(x : float,y:float,z:float):
+def move_latest_body(x: float, y: float, z: float):
     """
     Move the last body in Fusion 360 in the x, y, and z directions.
-    
+
     """
     endpoint = config.ENDPOINTS["move_body"]
-    payload = {
-        "x": x,
-        "y": y,
-        "z": z
-    }
+    payload = {"x": x, "y": y, "z": z}
     headers = config.HEADERS
     response = send_request(endpoint, payload, headers)
     return format_tool_response(response, "move_body")
+
 
 @mcp.tool()
 def create_thread(inside: bool, allsizes: int):
@@ -251,7 +250,7 @@ def create_thread(inside: bool, allsizes: int):
         #'1/4', '5/16', '3/8', '7/16', '1/2', '5/8', '3/4', '7/8', '1', '1 1/8', '1 1/4',
         # '1 3/8', '1 1/2', '1 3/4', '2', '2 1/4', '2 1/2', '2 3/4', '3', '3 1/2', '4', '4 1/2', '5')
         # allsizes = int value from 1 to 22
-    
+
     """
     endpoint = config.ENDPOINTS["threaded"]
     payload = {
@@ -259,8 +258,11 @@ def create_thread(inside: bool, allsizes: int):
         "allsizes": allsizes,
     }
     headers = config.HEADERS
-    response = send_request(endpoint, payload, headers, timeout=35)  # Longer timeout for user interaction
+    response = send_request(
+        endpoint, payload, headers, timeout=35
+    )  # Longer timeout for user interaction
     return format_tool_response(response, "create_thread")
+
 
 @mcp.tool()
 def test_connection():
@@ -269,6 +271,7 @@ def test_connection():
     response = send_request(endpoint, {}, {})
     return format_tool_response(response, "test_connection")
 
+
 @mcp.tool()
 def delete_all():
     """Deletes all objects and clears timeline history in the current Fusion 360 session."""
@@ -276,6 +279,7 @@ def delete_all():
     headers = config.HEADERS
     response = send_request(endpoint, {}, headers)
     return format_tool_response(response, "delete_all")
+
 
 @mcp.tool()
 def draw_holes(points: list, depth: float, width: float, faceindex: int = 0):
@@ -301,15 +305,11 @@ def draw_holes(points: list, depth: float, width: float, faceindex: int = 0):
     }
     """
     endpoint = config.ENDPOINTS["holes"]
-    payload = {
-        "points": points,
-        "width": width,
-        "depth": depth,
-        "faceindex": faceindex
-    }
+    payload = {"points": points, "width": width, "depth": depth, "faceindex": faceindex}
     headers = config.HEADERS
     response = send_request(endpoint, payload, headers)
     return format_tool_response(response, "draw_holes")
+
 
 @mcp.tool()
 def draw_witzenmannlogo(scale: float = 1.0, z: float = 1.0):
@@ -324,13 +324,11 @@ def draw_witzenmannlogo(scale: float = 1.0, z: float = 1.0):
     :return: Tool response
     """
     endpoint = config.ENDPOINTS["witzenmann"]
-    payload = {
-        "scale": scale,
-        "z": z
-    }
+    payload = {"scale": scale, "z": z}
     headers = config.HEADERS
     response = send_request(endpoint, payload, headers)
     return format_tool_response(response, "draw_witzenmannlogo")
+
 
 @mcp.tool()
 def spline(points: list[list[float]], plane: str):
@@ -344,13 +342,11 @@ def spline(points: list[list[float]], plane: str):
     It is essential that the lines are in the same plane as the profile you want to sweep.
     """
     endpoint = config.ENDPOINTS["spline"]
-    payload = {
-        "points": points,
-        "plane": plane
-    }
+    payload = {"points": points, "plane": plane}
     headers = config.HEADERS
     response = send_request(endpoint, payload, headers)
     return format_tool_response(response, "spline")
+
 
 @mcp.tool()
 def sweep():
@@ -362,12 +358,14 @@ def sweep():
     response = send_request(endpoint, {}, {})
     return format_tool_response(response, "sweep")
 
+
 @mcp.tool()
 def undo():
     """Undoes the last action."""
     endpoint = config.ENDPOINTS["undo"]
     response = send_request(endpoint, {}, {})
     return format_tool_response(response, "undo")
+
 
 @mcp.tool()
 def list_entities():
@@ -376,12 +374,14 @@ def list_entities():
     response = send_request(endpoint, {}, {})
     return format_tool_response(response, "list_entities")
 
+
 @mcp.tool()
 def count():
     """Counts the parameters in the current model."""
     endpoint = config.ENDPOINTS["count_parameters"]
     response = send_request(endpoint, {}, {})
     return response  # Return raw response for parameter count
+
 
 @mcp.tool()
 def list_parameters():
@@ -390,84 +390,87 @@ def list_parameters():
     response = send_request(endpoint, {}, {})
     return response  # Return raw response for parameter list
 
+
 @mcp.tool()
-def export_step(name : str):
+def export_step(name: str):
     """Exports the model as a STEP file."""
     endpoint = config.ENDPOINTS["export_step"]
-    data = {
-        "name": name
-    }
+    data = {"name": name}
     response = send_request(endpoint, data, {})
     return format_tool_response(response, "export_step")
 
+
 @mcp.tool()
-def export_stl(name : str):
+def export_stl(name: str):
     """Exports the model as an STL file."""
     endpoint = config.ENDPOINTS["export_stl"]
-    data = {
-        "name": name
-    }
+    data = {"name": name}
     response = send_request(endpoint, data, {})
     return format_tool_response(response, "export_stl")
 
+
 @mcp.tool()
-def capture_screenshot(name: str = "FusionScreenshot", width: int = 1920, height: int = 1080, directory: str = None):
+def capture_screenshot(
+    name: str = "FusionScreenshot",
+    width: int = 1920,
+    height: int = 1080,
+    directory: str = None,
+):
     """Captures a screenshot of the active viewport."""
     endpoint = config.ENDPOINTS["screenshot"]
-    payload = {
-        "name": name,
-        "width": width,
-        "height": height
-    }
+    payload = {"name": name, "width": width, "height": height}
     if directory:
         payload["directory"] = directory
     headers = config.HEADERS
     response = send_request(endpoint, payload, headers)
     return format_tool_response(response, "capture_screenshot")
 
+
 @mcp.tool()
 def fillet_edges(radius: str):
     """Creates a fillet on the specified edges."""
     endpoint = config.ENDPOINTS["fillet_edges"]
-    payload = {
-        "radius": radius
-    }
+    payload = {"radius": radius}
     headers = config.HEADERS
     response = send_request(endpoint, payload, headers)
     return format_tool_response(response, "fillet_edges")
+
 
 @mcp.tool()
 def change_parameter(name: str, value: str):
     """Changes the value of a parameter."""
     endpoint = config.ENDPOINTS["change_parameter"]
-    payload = {
-        "name": name,
-        "value": value
-    }
+    payload = {"name": name, "value": value}
     headers = config.HEADERS
     response = send_request(endpoint, payload, headers)
     return format_tool_response(response, "change_parameter")
 
+
 @mcp.tool()
-def draw_cylinder(radius: float , height: float , x: float, y: float, z: float , plane: str="XY"):
+def draw_cylinder(
+    radius: float, height: float, x: float, y: float, z: float, plane: str = "XY"
+):
     """
     Draw a cylinder. You can work in the XY plane.
     There are default values.
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["draw_cylinder"]
-    data = {
-        "radius": radius,
-        "height": height,
-        "x": x,
-        "y": y,
-        "z": z,
-        "plane": plane
-    }
+    data = {"radius": radius, "height": height, "x": x, "y": y, "z": z, "plane": plane}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw_cylinder")
+
+
 @mcp.tool()
-def draw_box(height_value:str, width_value:str, depth_value:str, x_value:float, y_value:float,z_value:float, plane:str="XY"):
+def draw_box(
+    height_value: str,
+    width_value: str,
+    depth_value: str,
+    x_value: float,
+    y_value: float,
+    z_value: float,
+    plane: str = "XY",
+):
     """
     You can pass the height, width, and depth of the box as strings.
     Depth is the depth in the z direction, so if the box should be flat,
@@ -491,21 +494,22 @@ def draw_box(height_value:str, width_value:str, depth_value:str, x_value:float, 
     You can adjust this as needed.
 
     Example: "XY", "YZ", "XZ"
-    
+
     """
     endpoint = config.ENDPOINTS["draw_box"]
     headers = config.HEADERS
     data = {
-        "height":height_value,
+        "height": height_value,
         "width": width_value,
         "depth": depth_value,
-        "x" : x_value,
-        "y" : y_value,
-        "z" : z_value,
-        "Plane": plane
+        "x": x_value,
+        "y": y_value,
+        "z": z_value,
+        "Plane": plane,
     }
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw_box")
+
 
 @mcp.tool()
 def shell_body(thickness: float, faceindex: int):
@@ -524,12 +528,10 @@ def shell_body(thickness: float, faceindex: int):
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["shell_body"]
-    data = {
-        "thickness": thickness,
-        "faceindex": faceindex
-    }
+    data = {"thickness": thickness, "faceindex": faceindex}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "shell_body")
+
 
 @mcp.tool()
 def draw_sphere(x: float, y: float, z: float, radius: float):
@@ -548,18 +550,15 @@ def draw_sphere(x: float, y: float, z: float, radius: float):
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["draw_sphere"]
-    data = {
-        "x": x,
-        "y": y,
-        "z": z,
-        "radius": radius
-    }
+    data = {"x": x, "y": y, "z": z, "radius": radius}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw_sphere")
 
 
 @mcp.tool()
-def draw_2d_rectangle(x_1: float, y_1: float, z_1: float, x_2: float, y_2: float, z_2: float, plane: str):
+def draw_2d_rectangle(
+    x_1: float, y_1: float, z_1: float, x_2: float, y_2: float, z_2: float, plane: str
+):
     """
     Draw a 2D rectangle in Fusion 360 for loft/sweep etc.
     """
@@ -572,10 +571,11 @@ def draw_2d_rectangle(x_1: float, y_1: float, z_1: float, x_2: float, y_2: float
         "x_2": x_2,
         "y_2": y_2,
         "z_2": z_2,
-        "plane": plane
+        "plane": plane,
     }
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw_2d_rectangle")
+
 
 @mcp.tool()
 def boolean_operation(operation: str):
@@ -587,16 +587,13 @@ def boolean_operation(operation: str):
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["boolean_operation"]
-    data = {
-        "operation": operation
-    }
+    data = {"operation": operation}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "boolean_operation")
 
 
-      
 @mcp.tool()
-def draw_lines(points : list, plane : str):
+def draw_lines(points: list, plane: str):
     """
     Draw lines in Fusion 360.
     You can pass the points as a list of lists.
@@ -608,30 +605,36 @@ def draw_lines(points : list, plane : str):
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["draw_lines"]
-    data = {
-        "points": points,
-        "plane": plane
-    }
+    data = {"points": points, "plane": plane}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw_lines")
+
 
 @mcp.tool()
 def extrude(value: float, angle: float):
     """Extrudes the last sketch by a specified value.
     You can also specify an angle.
-    
+
     """
     url = config.ENDPOINTS["extrude"]
-    data = {
-        "value": value,
-        "taperangle": angle
-    }
+    data = {"value": value, "taperangle": angle}
     response = send_request(url, data, config.HEADERS)
     return format_tool_response(response, "extrude")
 
 
 @mcp.tool()
-def draw_text(text: str, plane: str, x_1: float, y_1: float, z_1: float, x_2: float, y_2: float, z_2: float, thickness: float,value: float):
+def draw_text(
+    text: str,
+    plane: str,
+    x_1: float,
+    y_1: float,
+    z_1: float,
+    x_2: float,
+    y_2: float,
+    z_2: float,
+    thickness: float,
+    value: float,
+):
     """
     Draw text in Fusion 360 which is a sketch so you can then extrude it.
     With value you can specify how far you want to extrude the text.
@@ -648,13 +651,14 @@ def draw_text(text: str, plane: str, x_1: float, y_1: float, z_1: float, x_2: fl
         "y_2": y_2,
         "z_2": z_2,
         "thickness": thickness,
-        "extrusion_value": value
+        "extrusion_value": value,
     }
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw_text")
 
+
 @mcp.tool()
-def extrude_thin(thickness :float, distance : float):
+def extrude_thin(thickness: float, distance: float):
     """
     You can pass the wall thickness as a float.
     You can create beautiful hollow bodies with this.
@@ -662,15 +666,13 @@ def extrude_thin(thickness :float, distance : float):
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["extrude_thin"]
-    data = {
-        "thickness": thickness,
-        "distance": distance
-    }
+    data = {"thickness": thickness, "distance": distance}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "extrude_thin")
 
+
 @mcp.tool()
-def cut_extrude(depth :float):
+def cut_extrude(depth: float):
     """
     You can pass the cut depth as a float.
     :param depth: The cut depth in mm
@@ -678,29 +680,29 @@ def cut_extrude(depth :float):
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["cut_extrude"]
-    data = {
-        "depth": depth
-    }
+    data = {"depth": depth}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "cut_extrude")
-    
+
+
 @mcp.tool()
-def revolve(angle : float):
+def revolve(angle: float):
     """
     When you call this tool, the user will be asked to select a profile
     in Fusion and then an axis.
     We pass the angle as a float.
     """
-    headers = config.HEADERS    
+    headers = config.HEADERS
     endpoint = config.ENDPOINTS["revolve"]
-    data = {
-        "angle": angle
-    }
-    response = send_request(endpoint, data, headers, timeout=35)  # Longer timeout for user interaction
+    data = {"angle": angle}
+    response = send_request(
+        endpoint, data, headers, timeout=35
+    )  # Longer timeout for user interaction
     return format_tool_response(response, "revolve")
 
+
 @mcp.tool()
-def draw_arc(point1 : list, point2 : list, point3 : list, plane : str):
+def draw_arc(point1: list, point2: list, point3: list, plane: str):
     """
     Draw an arc in Fusion 360.
     You can pass the points as lists.
@@ -711,17 +713,15 @@ def draw_arc(point1 : list, point2 : list, point3 : list, plane : str):
     """
     endpoint = config.ENDPOINTS["arc"]
     headers = config.HEADERS
-    data = {
-        "point1": point1,
-        "point2": point2,
-        "point3": point3,
-        "plane": plane
-    }
+    data = {"point1": point1, "point2": point2, "point3": point3, "plane": plane}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw_arc")
 
+
 @mcp.tool()
-def draw_one_line(x1: float, y1: float, z1: float, x2: float, y2: float, z2: float, plane: str="XY"):
+def draw_one_line(
+    x1: float, y1: float, z1: float, x2: float, y2: float, z2: float, plane: str = "XY"
+):
     """
     Draw a line in Fusion 360.
     You can pass the coordinates as floats.
@@ -731,20 +731,21 @@ def draw_one_line(x1: float, y1: float, z1: float, x2: float, y2: float, z2: flo
     """
     endpoint = config.ENDPOINTS["draw_one_line"]
     headers = config.HEADERS
-    data = {
-        "x1": x1,
-        "y1": y1,
-        "z1": z1,
-        "x2": x2,
-        "y2": y2,
-        "z2": z2,
-        "plane": plane
-    }
+    data = {"x1": x1, "y1": y1, "z1": z1, "x2": x2, "y2": y2, "z2": z2, "plane": plane}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw_one_line")
 
+
 @mcp.tool()
-def rectangular_pattern(plane: str, quantity_one: float, quantity_two: float, distance_one: float, distance_two: float, axis_one: str, axis_two: str):
+def rectangular_pattern(
+    plane: str,
+    quantity_one: float,
+    quantity_two: float,
+    distance_one: float,
+    distance_two: float,
+    axis_one: str,
+    axis_two: str,
+):
     """
     You can create a rectangular pattern to distribute objects in a rectangular arrangement.
     You must pass two quantities (quantity_one, quantity_two) as floats,
@@ -761,7 +762,7 @@ def rectangular_pattern(plane: str, quantity_one: float, quantity_two: float, di
         "distance_one": distance_one,
         "distance_two": distance_two,
         "axis_one": axis_one,
-        "axis_two": axis_two
+        "axis_two": axis_two,
     }
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "rectangular_pattern")
@@ -786,17 +787,24 @@ def circular_pattern(plane: str, quantity: float, axis: str):
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["circular_pattern"]
-    data = {
-        "plane": plane,
-        "quantity": quantity,
-        "axis": axis
-    }
+    data = {"plane": plane, "quantity": quantity, "axis": axis}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "circular_pattern")
 
+
 @mcp.tool()
-def ellipsie(x_center: float, y_center: float, z_center: float,
-              x_major: float, y_major: float, z_major: float, x_through: float, y_through: float, z_through: float, plane: str):
+def ellipsie(
+    x_center: float,
+    y_center: float,
+    z_center: float,
+    x_major: float,
+    y_major: float,
+    z_major: float,
+    x_through: float,
+    y_through: float,
+    z_through: float,
+    plane: str,
+):
     """Draw an ellipse in Fusion 360."""
     endpoint = config.ENDPOINTS["ellipsie"]
     headers = config.HEADERS
@@ -810,10 +818,11 @@ def ellipsie(x_center: float, y_center: float, z_center: float,
         "x_through": x_through,
         "y_through": y_through,
         "z_through": z_through,
-        "plane": plane
+        "plane": plane,
     }
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "ellipsie")
+
 
 @mcp.tool()
 def draw2Dcircle(radius: float, x: float, y: float, z: float, plane: str = "XY"):
@@ -840,15 +849,10 @@ def draw2Dcircle(radius: float, x: float, y: float, z: float, plane: str = "XY")
     """
     headers = config.HEADERS
     endpoint = config.ENDPOINTS["draw2Dcircle"]
-    data = {
-        "radius": radius,
-        "x": x,
-        "y": y,
-        "z": z,
-        "plane": plane
-    }
+    data = {"radius": radius, "x": x, "y": y, "z": z, "plane": plane}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "draw2Dcircle")
+
 
 @mcp.tool()
 def loft(sketchcount: int):
@@ -860,9 +864,7 @@ def loft(sketchcount: int):
     """
     endpoint = config.ENDPOINTS["loft"]
     headers = config.HEADERS
-    data = {
-        "sketchcount": sketchcount
-    }
+    data = {"sketchcount": sketchcount}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "loft")
 
@@ -872,30 +874,26 @@ def loft(sketchcount: int):
 # These tools allow you to modify existing objects using their unique entity tokens
 ##############################################################################################
 
+
 @mcp.tool()
 def move_body_by_token(body_token: str, x: float, y: float, z: float):
     """
     Move a specific body in Fusion 360 using its entity token.
     The body_token is returned when you create objects (e.g., from draw_box, draw_cylinder).
     Use this to move a specific body without affecting others.
-    
+
     Args:
         body_token: The unique entity token of the body (from entity_data.bodies[].body_token)
         x: Translation distance in X direction (cm)
         y: Translation distance in Y direction (cm)
         z: Translation distance in Z direction (cm)
-    
+
     Returns:
         Updated entity data with the move feature information
     """
     endpoint = config.ENDPOINTS["move_body_by_token"]
     headers = config.HEADERS
-    data = {
-        "body_token": body_token,
-        "x": x,
-        "y": y,
-        "z": z
-    }
+    data = {"body_token": body_token, "x": x, "y": y, "z": z}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "move_body_by_token")
 
@@ -905,18 +903,16 @@ def delete_body_by_token(body_token: str):
     """
     Delete a specific body in Fusion 360 using its entity token.
     The body_token is returned when you create objects.
-    
+
     Args:
         body_token: The unique entity token of the body to delete
-    
+
     Returns:
         Status information about the deleted body
     """
     endpoint = config.ENDPOINTS["delete_body_by_token"]
     headers = config.HEADERS
-    data = {
-        "body_token": body_token
-    }
+    data = {"body_token": body_token}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "delete_body_by_token")
 
@@ -935,9 +931,7 @@ def delete_entity_by_token(entity_token: str):
     """
     endpoint = config.ENDPOINTS["delete_entity_by_token"]
     headers = config.HEADERS
-    data = {
-        "entity_token": entity_token
-    }
+    data = {"entity_token": entity_token}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "delete_entity_by_token")
 
@@ -947,20 +941,17 @@ def edit_extrude_distance(feature_token: str, new_distance: float):
     """
     Modify the extrusion distance of an existing extrude feature.
     The feature_token is returned when you create extrusions.
-    
+
     Args:
         feature_token: The unique entity token of the extrude feature (from entity_data.feature_token)
         new_distance: The new distance value in cm
-    
+
     Returns:
         Updated entity data with the modified feature information
     """
     endpoint = config.ENDPOINTS["edit_extrude_distance"]
     headers = config.HEADERS
-    data = {
-        "feature_token": feature_token,
-        "new_distance": new_distance
-    }
+    data = {"feature_token": feature_token, "new_distance": new_distance}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "edit_extrude_distance")
 
@@ -970,10 +961,10 @@ def get_body_info(body_token: str):
     """
     Get detailed information about a body by its entity token.
     Useful for checking dimensions, volume, and other properties of an existing body.
-    
+
     Args:
         body_token: The unique entity token of the body
-    
+
     Returns:
         Body information including:
         - body_name, body_token
@@ -984,9 +975,7 @@ def get_body_info(body_token: str):
     """
     endpoint = config.ENDPOINTS["get_body_info"]
     headers = config.HEADERS
-    data = {
-        "body_token": body_token
-    }
+    data = {"body_token": body_token}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "get_body_info")
 
@@ -996,10 +985,10 @@ def get_feature_info(feature_token: str):
     """
     Get detailed information about a feature by its entity token.
     Useful for checking the current state of a feature before modifying it.
-    
+
     Args:
         feature_token: The unique entity token of the feature
-    
+
     Returns:
         Feature information including:
         - feature_name, feature_token
@@ -1009,9 +998,7 @@ def get_feature_info(feature_token: str):
     """
     endpoint = config.ENDPOINTS["get_feature_info"]
     headers = config.HEADERS
-    data = {
-        "feature_token": feature_token
-    }
+    data = {"feature_token": feature_token}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "get_feature_info")
 
@@ -1020,20 +1007,17 @@ def get_feature_info(feature_token: str):
 def set_body_visibility(body_token: str, is_visible: bool):
     """
     Show or hide a specific body in Fusion 360.
-    
+
     Args:
         body_token: The unique entity token of the body
         is_visible: True to show the body, False to hide it
-    
+
     Returns:
         Updated visibility status
     """
     endpoint = config.ENDPOINTS["set_body_visibility"]
     headers = config.HEADERS
-    data = {
-        "body_token": body_token,
-        "is_visible": is_visible
-    }
+    data = {"body_token": body_token, "is_visible": is_visible}
     response = send_request(endpoint, data, headers)
     return format_tool_response(response, "set_body_visibility")
 
@@ -1255,8 +1239,6 @@ def kompensator():
     
                 """
     return prompt
-
-
 
 
 if __name__ == "__main__":
